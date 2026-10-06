@@ -192,7 +192,6 @@ export default function Portal() {
                       className={cx('flex min-h-[72px] items-stretch gap-3 rounded-xl border px-3 py-2', t ? 'border-c-line bg-c-tint' : 'border-border bg-surface', soyYo && 'ring-2 ring-text/15')}>
                       <div className="flex w-36 flex-none flex-col justify-center">
                         <span className="text-sm font-semibold text-c-fg">{e.nombre}{soyYo ? ' (tú)' : ''}</span>
-                        <span className="text-xs text-muted">{e.rol}</span>
                       </div>
                       {t ? (
                         <div className="flex min-h-[64px] flex-1"><ChipBody tramos={t.tramos} /></div>
@@ -224,7 +223,6 @@ export default function Portal() {
                           <span className="h-[9px] w-[9px] flex-none rounded-full bg-c-solid" />
                           <span className="text-sm font-semibold">{e.nombre}{soyYo ? ' (tú)' : ''}</span>
                         </div>
-                        <span className="pl-[17px] text-xs text-muted">{e.rol}</span>
                       </div>
                       {fechas.map((f) => {
                         const t = turnoDe(e.id, f);

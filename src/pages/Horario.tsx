@@ -176,7 +176,6 @@ export default function Horario() {
                         <div key={e.id} className="contents" style={colorVars(e.color)}>
                           <div className="flex flex-col justify-center gap-1 border-b border-r border-border px-3 py-2.5">
                             <div className="flex items-center gap-2"><span className="h-[9px] w-[9px] flex-none rounded-full bg-c-solid" /><span className="text-sm font-semibold">{e.nombre}</span></div>
-                            <span className="pl-[17px] text-xs text-muted">{e.rol}</span>
                             {e.excluirNomina && <span className="ml-[17px] self-start rounded-full border border-border bg-sunken px-1.5 py-0.5 text-[10px] font-semibold text-muted">Excluida de nómina</span>}
                           </div>
                           {fechas.map(f => { const t = turnoDe(e.id, f); return (

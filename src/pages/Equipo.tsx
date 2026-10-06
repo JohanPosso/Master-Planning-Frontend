@@ -47,7 +47,7 @@ export default function Equipo() {
       ...rest,
       nombre: draft.nombre.trim(),
       tarifaCent,
-      usuario: draft.usuario?.trim() || null,
+      usuario: draft.usuario?.trim().toLowerCase() || null,
     };
     if (quitarAcceso) payload.quitarAcceso = true;
     else if (password) payload.password = password;

@@ -99,16 +99,20 @@ function crearMotor(setState: (s: State) => void, setError: (e: string | null) =
 
   const acciones: Api['acciones'] = {
     guardarEmpleada: e => {
-      const { password, quitarAcceso, ...limpia } = e;
+      const { password, quitarAcceso, tieneAccesoPortal: _tap, ...limpia } = e;
       const preview = {
         ...limpia,
         tieneAccesoPortal: quitarAcceso ? false : Boolean(limpia.usuario && (password || e.tieneAccesoPortal)),
       };
       optimista(
         s => ({ ...s, empleadas: upsert(s.empleadas, preview, x => x.id === e.id) }),
-        () => api.guardarEmpleada(e),
+        async () => {
+          const guardada = await api.guardarEmpleada(e);
+          aplicar(s => ({ ...s, empleadas: upsert(s.empleadas, guardada, x => x.id === guardada.id) }));
+        },
         actual()?.empleadas.some(x => x.id === e.id) ? 'Cambios guardados' : `${e.nombre} añadida al equipo`);
-    },    eliminarEmpleada: id => {
+    },
+    eliminarEmpleada: id => {
       const hoy = iso(new Date());
       const n = actual()?.empleadas.find(e => e.id === id)?.nombre;
       optimista(

@@ -18,7 +18,7 @@ export default function Login() {
     setError(null);
     setEnviando(true);
     try {
-      const s = await login(usuario.trim(), password);
+      const s = await login(usuario.trim().toLowerCase(), password);
       navigate(s.rol === 'empleada' ? '/portal' : '/', { replace: true });
     } catch (err) {
       setError(mensajeError(err));
