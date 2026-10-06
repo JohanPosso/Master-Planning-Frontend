@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import type { Empleada, PeriodoPago, Plantilla, Registro, State, Tramo, Turno } from './lib/types';
-import { api, mensajeError } from './lib/api';
+import { api, mensajeError, type EmpleadaWrite } from './lib/api';
 import { diffEstado, sinCambios } from './lib/sync';
 import { iso, uid } from './lib/time';
 import { aplicarTema, type Tema } from './lib/theme';
@@ -12,7 +12,7 @@ interface Api {
   tema: Tema; setTema: (t: Tema) => void;
   deshacer: () => void;
   acciones: {
-    guardarEmpleada: (e: Empleada) => void;
+    guardarEmpleada: (e: EmpleadaWrite) => void;
     eliminarEmpleada: (id: string) => void;
     moverTurno: (id: string, empleadaId: string, fecha: string, duplicar: boolean) => void;
     turnoDesdePlantilla: (plantillaId: string, empleadaId: string, fecha: string) => void;
@@ -98,11 +98,17 @@ function crearMotor(setState: (s: State) => void, setError: (e: string | null) =
   const actual = () => ref.estado;
 
   const acciones: Api['acciones'] = {
-    guardarEmpleada: e => optimista(
-      s => ({ ...s, empleadas: upsert(s.empleadas, e, x => x.id === e.id) }),
-      () => api.guardarEmpleada(e),
-      actual()?.empleadas.some(x => x.id === e.id) ? 'Cambios guardados' : `${e.nombre} añadida al equipo`),
-    eliminarEmpleada: id => {
+    guardarEmpleada: e => {
+      const { password, quitarAcceso, ...limpia } = e;
+      const preview = {
+        ...limpia,
+        tieneAccesoPortal: quitarAcceso ? false : Boolean(limpia.usuario && (password || e.tieneAccesoPortal)),
+      };
+      optimista(
+        s => ({ ...s, empleadas: upsert(s.empleadas, preview, x => x.id === e.id) }),
+        () => api.guardarEmpleada(e),
+        actual()?.empleadas.some(x => x.id === e.id) ? 'Cambios guardados' : `${e.nombre} añadida al equipo`);
+    },    eliminarEmpleada: id => {
       const hoy = iso(new Date());
       const n = actual()?.empleadas.find(e => e.id === id)?.nombre;
       optimista(

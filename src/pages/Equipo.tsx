@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Plus, Trash2, X } from 'lucide-react';
 import type { ColorKey, Empleada } from '../lib/types';
+import type { EmpleadaWrite } from '../lib/api';
 import { COLORES, NOMBRE_COLOR, colorVars } from '../lib/theme';
 import { eur, uid } from '../lib/time';
 import { useStore } from '../store';
@@ -10,8 +11,14 @@ import { Badge, Button, Modal, PageHeader, Toggle, cx, inputCls } from '../compo
 const DN = ['L', 'M', 'X', 'J', 'V', 'S', 'D'], DL = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const descTxt = (d: number[]) => !d.length ? 'Sin preferencia' : d.length === 2 && d[1] - d[0] === 1 ? `${DL[d[0]]} y ${DL[d[1]].toLowerCase()}` : d.map(i => DL[i]).join(', ');
 
-type Draft = Omit<Empleada, 'tarifaCent'> & { tarifa: string };
-const toDraft = (e: Empleada): Draft => ({ ...e, tarifa: (e.tarifaCent / 100).toFixed(2).replace('.', ',') });
+type Draft = Omit<Empleada, 'tarifaCent'> & { tarifa: string; password: string; quitarAcceso: boolean };
+const toDraft = (e: Empleada): Draft => ({
+  ...e,
+  usuario: e.usuario ?? '',
+  tarifa: (e.tarifaCent / 100).toFixed(2).replace('.', ','),
+  password: '',
+  quitarAcceso: false,
+});
 
 export default function Equipo() {
   const { state, acciones } = useStore();
@@ -24,14 +31,27 @@ export default function Equipo() {
   const abrirNueva = () => {
     const libre = COLORES.find(c => !team.some(e => e.color === c)) ?? 'gris';
     setNuevo(true);
-    setDraft({ id: uid(), nombre: '', rol: 'Empleada', color: libre, tarifa: '10,00', diasDescanso: [], descansoSeguido: false, excluirNomina: false, activa: true });
+    setDraft({
+      id: uid(), nombre: '', rol: 'Empleada', color: libre, tarifa: '10,00', diasDescanso: [],
+      descansoSeguido: false, excluirNomina: false, activa: true, usuario: '', password: '', quitarAcceso: false,
+    });
   };
   const tarifaCent = draft ? Math.round(parseFloat(draft.tarifa.replace(',', '.')) * 100) : 0;
-  const valido = !!draft && draft.nombre.trim().length > 0 && tarifaCent >= 0 && !Number.isNaN(tarifaCent);
+  const valido = !!draft && draft.nombre.trim().length > 0 && tarifaCent >= 0 && !Number.isNaN(tarifaCent)
+    && (!draft.password || (draft.usuario?.trim().length ?? 0) >= 2);
   const guardar = () => {
     if (!draft || !valido) return;
-    const { tarifa, ...rest } = draft; void tarifa;
-    acciones.guardarEmpleada({ ...rest, nombre: draft.nombre.trim(), tarifaCent });
+    const { tarifa, password, quitarAcceso, ...rest } = draft;
+    void tarifa;
+    const payload: EmpleadaWrite = {
+      ...rest,
+      nombre: draft.nombre.trim(),
+      tarifaCent,
+      usuario: draft.usuario?.trim() || null,
+    };
+    if (quitarAcceso) payload.quitarAcceso = true;
+    else if (password) payload.password = password;
+    acciones.guardarEmpleada(payload);
     setDraft(null);
   };
   const usados = team.filter(e => e.id !== draft?.id).map(e => e.color);
@@ -55,7 +75,7 @@ export default function Equipo() {
             <button key={e.id} style={colorVars(e.color)} onClick={() => { setNuevo(false); setDraft(toDraft(e)); }}
               className={cx('grid grid-cols-[1fr_auto] items-center gap-2 rounded-xl border bg-surface px-4 py-3 text-left transition-shadow hover:border-border-strong hover:shadow-sm md:grid-cols-[minmax(0,1.3fr)_110px_110px_minmax(0,1fr)_120px_90px]',
                 draft?.id === e.id ? 'border-c-solid shadow-[0_0_0_3px_var(--c-tint)]' : 'border-border', !e.activa && 'opacity-60')}>
-              <div className="flex items-center gap-3"><span className="grid h-[34px] w-[34px] place-items-center rounded-full border-[1.5px] border-c-solid bg-c-tint text-[13px] font-semibold text-c-fg">{e.nombre[0]?.toUpperCase()}</span><div className="flex flex-col"><span className="text-sm font-semibold">{e.nombre}</span><span className="text-xs text-muted">{NOMBRE_COLOR[e.color]}</span></div></div>
+              <div className="flex items-center gap-3"><span className="grid h-[34px] w-[34px] place-items-center rounded-full border-[1.5px] border-c-solid bg-c-tint text-[13px] font-semibold text-c-fg">{e.nombre[0]?.toUpperCase()}</span><div className="flex flex-col"><span className="text-sm font-semibold">{e.nombre}</span><span className="text-xs text-muted">{NOMBRE_COLOR[e.color]}{e.tieneAccesoPortal ? ' · portal' : ''}</span></div></div>
               <span className="hidden text-[13px] md:block">{e.rol}</span>
               <span className="num hidden text-[13px] md:block">{eur(e.tarifaCent)}/h</span>
               <span className="hidden text-[13px] text-muted md:block">{descTxt(e.diasDescanso)}</span>
@@ -85,7 +105,6 @@ export default function Equipo() {
                       </button>
                     ))}
                   </div>
-                  <span className="text-[11px] text-muted">Los colores con punto ya los usa otra empleada. Todos cumplen contraste AA en claro y oscuro.</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5"><span className="text-xs font-semibold">Rol</span>
@@ -94,6 +113,21 @@ export default function Equipo() {
                   <label className="flex flex-col gap-1.5"><span className="text-xs font-semibold">Tarifa por hora</span>
                     <div className="flex h-[38px] items-center gap-1.5 rounded-lg border border-border bg-bg px-3"><input inputMode="decimal" value={draft.tarifa} onChange={e => upd({ tarifa: e.target.value })} className="num min-w-0 flex-1 bg-transparent text-sm outline-none" /><span className="text-[13px] text-muted">€/h</span></div>
                   </label>
+                </div>
+                <div className="flex flex-col gap-3 rounded-xl border border-border bg-sunken/40 p-3">
+                  <span className="text-xs font-semibold">Acceso al portal</span>
+                  <label className="flex flex-col gap-1.5"><span className="text-[11px] text-muted">Usuario</span>
+                    <input value={draft.usuario ?? ''} onChange={e => upd({ usuario: e.target.value, quitarAcceso: false })} placeholder="ej. silvia" className={inputCls} autoComplete="off" />
+                  </label>
+                  <label className="flex flex-col gap-1.5"><span className="text-[11px] text-muted">PIN / contraseña {draft.tieneAccesoPortal && !nuevo ? '(dejar vacío para no cambiar)' : ''}</span>
+                    <input type="password" value={draft.password} onChange={e => upd({ password: e.target.value, quitarAcceso: false })} placeholder="mín. 4 caracteres" className={inputCls} autoComplete="new-password" />
+                  </label>
+                  {draft.tieneAccesoPortal && !nuevo && (
+                    <label className="flex items-center gap-2 text-[13px]">
+                      <input type="checkbox" checked={draft.quitarAcceso} onChange={e => upd({ quitarAcceso: e.target.checked, password: '' })} />
+                      Quitar acceso al portal
+                    </label>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2"><span className="text-xs font-semibold">Días de descanso preferidos</span>
                   <div className="flex gap-1.5">{DN.map((t, i) => { const on = draft.diasDescanso.includes(i); return <button key={i} onClick={() => upd({ diasDescanso: on ? draft.diasDescanso.filter(x => x !== i) : [...draft.diasDescanso, i].sort() })} className={cx('grid h-[38px] w-[38px] place-items-center rounded-lg border text-[13px] font-semibold', on ? 'border-text bg-text text-bg' : 'border-border bg-bg')}>{t}</button>; })}</div>
@@ -121,7 +155,7 @@ export default function Equipo() {
         footer={<>
           <div className="flex-1" />
           <Button onClick={() => setConfirmar(false)}>Cancelar</Button>
-          <Button onClick={() => { if (draft) { const { tarifa, ...r } = draft; void tarifa; acciones.guardarEmpleada({ ...r, tarifaCent, activa: false }); } setConfirmar(false); setDraft(null); }}>Marcar inactiva</Button>
+          <Button onClick={() => { if (draft) { const { tarifa, password, quitarAcceso, ...r } = draft; void tarifa; void password; void quitarAcceso; acciones.guardarEmpleada({ ...r, tarifaCent, activa: false }); } setConfirmar(false); setDraft(null); }}>Marcar inactiva</Button>
           <Button className="bg-error-solid text-white hover:opacity-90" onClick={() => { if (draft) acciones.eliminarEmpleada(draft.id); setConfirmar(false); setDraft(null); }}>Eliminar</Button>
         </>}>
         <p className="text-sm leading-relaxed text-muted">Se quitarán sus turnos futuros del horario. Sus horas registradas y pagadas se conservan en el histórico. Si solo deja de trabajar un tiempo, márcala como inactiva.</p>

@@ -1,8 +1,13 @@
-import type { Ajustes, Empleada, PeriodoPago, Plantilla, Registro, Reglas, Semana, State, Turno } from './types';
+import type { Ajustes, Empleada, PeriodoPago, Perfil, Plantilla, Registro, Reglas, Rol, Semana, State, Turno } from './types';
 import type { SyncOps } from './sync';
 
 /** En desarrollo Vite redirige /api al backend (vite.config.ts). En producción: VITE_API_URL. */
 const BASE = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '');
+
+let authToken: string | null = null;
+export const setAuthToken = (token: string | null) => {
+  authToken = token;
+};
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public detalles?: unknown) {
@@ -13,11 +18,14 @@ export class ApiError extends Error {
 
 async function pedir<T>(metodo: string, ruta: string, cuerpo?: unknown): Promise<T> {
   let res: Response;
+  const headers: Record<string, string> = {};
+  if (cuerpo !== undefined) headers['Content-Type'] = 'application/json';
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
   try {
     res = await fetch(`${BASE}${ruta}`, {
       method: metodo,
-      headers: cuerpo === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo)
+      headers,
+      body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
     });
   } catch {
     throw new ApiError(0, 'No se pudo conectar con el servidor');
@@ -25,7 +33,6 @@ async function pedir<T>(metodo: string, ruta: string, cuerpo?: unknown): Promise
   if (res.status === 204) return undefined as T;
   const datos = await res.json().catch(() => null);
   if (!res.ok) {
-    // Sin cuerpo de error de la API (proxy o gateway caídos) → el servidor no está respondiendo.
     const porDefecto = res.status >= 500 ? 'El servidor no responde. Inténtalo de nuevo en unos segundos.' : `Error ${res.status}`;
     const { message = porDefecto, details } = datos?.error ?? {};
     const campo = Array.isArray(details) && details[0] ? ` · ${details[0].path}: ${details[0].message}` : '';
@@ -36,11 +43,50 @@ async function pedir<T>(metodo: string, ruta: string, cuerpo?: unknown): Promise
 
 export const mensajeError = (e: unknown) => (e instanceof Error ? e.message : 'Error inesperado');
 
+export interface LoginRes {
+  token: string;
+  rol: Rol;
+  perfil: Perfil;
+}
+
+export interface PortalEstado {
+  version: number;
+  empleada: Empleada;
+  turnos: Turno[];
+  registros: Registro[];
+  pagos: PeriodoPago[];
+  semanas: Semana[];
+  reglas: Reglas;
+  ajustes: Ajustes;
+}
+
+export interface PortalNomina {
+  inicio: string;
+  fin: string;
+  estimacion: {
+    minutos: number;
+    recargosCent: number;
+    importeCent: number;
+    excluida: boolean;
+    pendientes: string[];
+  };
+  historico: PeriodoPago[];
+}
+
+export type EmpleadaWrite = Empleada & { password?: string; quitarAcceso?: boolean };
+
 export const api = {
+  login: (usuario: string, password: string) => pedir<LoginRes>('POST', '/auth/login', { usuario, password }),
+  me: () => pedir<{ rol: Rol; perfil: Perfil }>('GET', '/auth/me'),
+  logout: () => pedir<void>('POST', '/auth/logout'),
+
+  portalEstado: () => pedir<PortalEstado>('GET', '/portal/estado'),
+  portalNomina: (inicio: string, fin: string) => pedir<PortalNomina>('GET', `/portal/nomina?inicio=${inicio}&fin=${fin}`),
+
   estado: () => pedir<State>('GET', '/estado'),
   sync: (ops: SyncOps) => pedir<void>('POST', '/sync', ops),
 
-  guardarEmpleada: (e: Empleada) => pedir<Empleada>('PUT', `/empleadas/${e.id}`, e),
+  guardarEmpleada: (e: EmpleadaWrite) => pedir<Empleada>('PUT', `/empleadas/${e.id}`, e),
   eliminarEmpleada: (id: string) => pedir<{ empleada: Empleada }>('DELETE', `/empleadas/${id}`),
 
   guardarTurno: (t: Turno) => pedir<Turno>('PUT', `/turnos/${t.id}`, t),
@@ -62,5 +108,5 @@ export const api = {
   eliminarPlantilla: (id: string) => pedir<void>('DELETE', `/plantillas/${id}`),
 
   setReglas: (r: Partial<Reglas>) => pedir<Reglas>('PATCH', '/reglas', r),
-  setAjustes: (a: Partial<Ajustes>) => pedir<Ajustes>('PATCH', '/ajustes', a)
+  setAjustes: (a: Partial<Ajustes>) => pedir<Ajustes>('PATCH', '/ajustes', a),
 };

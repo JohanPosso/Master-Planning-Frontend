@@ -22,16 +22,19 @@ npm test   # Vitest
 
 ## Qué funciona
 
+- **Login**: encargado (`admin`) o empleada (usuario + PIN asignado en Equipo).
+- **Portal empleada** (`/portal`): horario publicado y estimación/histórico de pago (solo lectura).
 - **Horario · Semana**: cuadrícula, drag & drop de turnos, plantillas, avisos, publicar/borrador, CSV/PDF.
 - **Horario · Día**: línea de tiempo 06:00–21:00 con ajuste de duración.
 - **Registro de horas**: prellenado, edición en línea, confirmación por fila o día.
 - **Nómina**: cálculo con recargos, histórico y marcar como pagado.
-- **Inicio / Equipo / Ajustes**: indicadores, CRUD de empleadas, plantillas, reglas y tema.
+- **Inicio / Equipo / Ajustes**: indicadores, CRUD de empleadas (con acceso portal), plantillas, reglas y tema.
 
 ## Estructura
 
 ```
 src/
+  lib/auth.tsx      Sesión JWT
   lib/types.ts      Modelo de datos
   lib/api.ts        Cliente HTTP
   lib/sync.ts       Diff de estado → POST /api/sync
@@ -40,7 +43,7 @@ src/
   lib/time.ts       Minutos ↔ HH:MM, euros, fechas
   store.tsx         Estado global sincronizado con la API
   components/       UI compartida
-  pages/            Pantallas de la app
+  pages/            Login, Portal, Inicio, Horario…
 ```
 
 ## Convenciones

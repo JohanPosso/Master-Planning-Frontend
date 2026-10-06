@@ -6,6 +6,7 @@ export interface Empleada {
   id: string; nombre: string; rol: 'Empleada' | 'Jefa'; color: ColorKey;
   tarifaCent: number; diasDescanso: number[]; descansoSeguido: boolean;
   excluirNomina: boolean; activa: boolean; eliminadaEn?: string;
+  usuario?: string | null; tieneAccesoPortal?: boolean;
 }
 export interface Plantilla { id: string; nombre: string; tramos: Tramo[] }
 export interface Turno { id: string; empleadaId: string; fecha: string; tramos: Tramo[]; plantillaId?: string; avisosIgnorados?: string[] }
@@ -31,3 +32,12 @@ export interface State {
   pagos: PeriodoPago[]; semanas: Semana[]; reglas: Reglas; ajustes: Ajustes;
 }
 export interface Aviso { nivel: 'error' | 'warn'; fecha?: string; empleadaId?: string; titulo: string; detalle: string }
+
+export type Rol = 'admin' | 'empleada';
+export interface Perfil {
+  id: string;
+  usuario: string | null;
+  nombre: string;
+  rol: Rol;
+  color?: string;
+}
