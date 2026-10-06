@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Los valores reales viven en src/lib/theme.ts (claro/oscuro); aquí solo se exponen a Tailwind. */
+@theme inline {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-hover: var(--hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primaryFg);
+  --color-primary-tint: var(--primary-tint);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-fg: var(--warn-fg);
+  --color-warn-line: var(--warn-line);
+  --color-error-bg: var(--error-bg);
+  --color-error-fg: var(--error-fg);
+  --color-error-line: var(--error-line);
+  --color-error-solid: var(--error-solid);
+  --color-ok-bg: var(--ok-bg);
+  --color-ok-fg: var(--ok-fg);
+  --color-ok-solid: var(--ok-solid);
+  --color-c-solid: var(--c-solid);
+  --color-c-tint: var(--c-tint);
+  --color-c-fg: var(--c-fg);
+  --color-c-line: var(--c-line);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-drag: var(--shadow-drag);
+  --shadow-modal: var(--shadow-modal);
+}
+
+@layer base {
+  *, ::before, ::after { border-color: var(--border); }
+  html, body, #root { height: 100%; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+  a { color: var(--primary); }
+  input, button, select, textarea { font: inherit; color: inherit; }
+}
+
+@utility num { font-variant-numeric: tabular-nums; }
+@utility rest-stripes { background: repeating-linear-gradient(135deg, var(--rest-a) 0 6px, var(--rest-b) 6px 12px); }
+
+@media print {
+  aside, nav, .no-print { display: none !important; }
+  body { background: white; }
+}
