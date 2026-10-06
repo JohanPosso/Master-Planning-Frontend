@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { LogOut, Moon, Sun } from 'lucide-react';
+import { LogOut, Moon, Settings2, Sun } from 'lucide-react';
 import { useAuth, mensajeError } from '../lib/auth';
 import { api, type PortalEstado, type PortalNomina } from '../lib/api';
 import { colorVars } from '../lib/theme';
@@ -8,10 +8,10 @@ import { capital, diaIdx, diasSemana, dur, eur, fmt, iso, lunesDe, minutos, rang
 import { aplicarTema, type Tema } from '../lib/theme';
 import { ChipBody } from '../components/ShiftChip';
 import { WeekSelector } from '../components/WeekSelector';
-import { Badge, Button, PageHeader, Segmented, cx } from '../components/ui';
+import { Badge, Button, Modal, PageHeader, Segmented, cx, inputCls } from '../components/ui';
 
 export default function Portal() {
-  const { logout } = useAuth();
+  const { logout, actualizarPerfil } = useAuth();
   const [tema, setTema] = useState<Tema>((localStorage.getItem('jornada:tema') as Tema) || 'claro');
   const [estado, setEstado] = useState<PortalEstado | null>(null);
   const [nomina, setNomina] = useState<PortalNomina | null>(null);
@@ -21,6 +21,14 @@ export default function Portal() {
   const [dir, setDir] = useState(0);
   const [vista, setVista] = useState<'semana' | 'dia'>('semana');
   const [dia, setDia] = useState(() => diaIdx(new Date()));
+  const [editar, setEditar] = useState(false);
+  const [nombre, setNombre] = useState('');
+  const [usuario, setUsuario] = useState('');
+  const [passwordActual, setPasswordActual] = useState('');
+  const [passwordNueva, setPasswordNueva] = useState('');
+  const [passwordNueva2, setPasswordNueva2] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [errorPerfil, setErrorPerfil] = useState<string | null>(null);
 
   useEffect(() => {
     aplicarTema(tema);
@@ -80,6 +88,57 @@ export default function Portal() {
 
   const irA = (d: Date, dd: number) => { setDir(dd); setLunes(d); };
 
+  const abrirEditar = () => {
+    if (!estado) return;
+    setNombre(estado.empleada.nombre);
+    setUsuario(estado.empleada.usuario ?? '');
+    setPasswordActual('');
+    setPasswordNueva('');
+    setPasswordNueva2('');
+    setErrorPerfil(null);
+    setOkPerfil(false);
+    setEditar(true);
+  };
+
+  const guardarPerfil = async (ev?: FormEvent) => {
+    ev?.preventDefault();
+    if (!estado) return;
+    setErrorPerfil(null);
+    if (passwordNueva && passwordNueva !== passwordNueva2) {
+      setErrorPerfil('Las claves nuevas no coinciden');
+      return;
+    }
+    const body: { nombre?: string; usuario?: string; passwordActual?: string; passwordNueva?: string } = {};
+    if (nombre.trim() !== estado.empleada.nombre) body.nombre = nombre.trim();
+    if ((usuario.trim().toLowerCase() || '') !== (estado.empleada.usuario ?? '')) body.usuario = usuario.trim().toLowerCase();
+    if (passwordNueva) {
+      body.passwordActual = passwordActual;
+      body.passwordNueva = passwordNueva;
+    }
+    if (!body.nombre && !body.usuario && !body.passwordNueva) {
+      setErrorPerfil('No hay cambios que guardar');
+      return;
+    }
+    setGuardando(true);
+    try {
+      const actualizada = await api.portalPerfil(body);
+      setEstado((s) => (s ? {
+        ...s,
+        empleada: actualizada,
+        empleadas: s.empleadas.map((e) => (e.id === actualizada.id ? { ...e, nombre: actualizada.nombre, color: actualizada.color, rol: actualizada.rol } : e)),
+      } : s));
+      actualizarPerfil({ nombre: actualizada.nombre, usuario: actualizada.usuario ?? null });
+      setPasswordActual('');
+      setPasswordNueva('');
+      setPasswordNueva2('');
+      setEditar(false);
+    } catch (err) {
+      setErrorPerfil(mensajeError(err));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   if (error) {
     return (
       <div className="grid min-h-full place-items-center p-6">
@@ -105,8 +164,11 @@ export default function Portal() {
         </span>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold">{empleada.nombre}</div>
-          <div className="text-[11px] text-muted">Horario del equipo · solo lectura</div>
+          <div className="text-[11px] text-muted">Horario del equipo</div>
         </div>
+        <button onClick={abrirEditar} className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-hover" aria-label="Mis datos">
+          <Settings2 size={16} />
+        </button>
         <button onClick={() => setTema(tema === 'claro' ? 'oscuro' : 'claro')} className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-hover" aria-label="Tema">
           {tema === 'claro' ? <Moon size={16} /> : <Sun size={16} />}
         </button>
@@ -139,11 +201,10 @@ export default function Portal() {
 
       {!publicada && (
         <div className="border-b border-border bg-sunken px-4 py-2 text-[13px] text-muted md:px-6">
-          Esta semana aún no está publicada. Solo verás semanas que el encargado haya publicado.
+          Esta semana aún no está publicada.
         </div>
       )}
 
-      {/* Móvil */}
       <div className="flex flex-col gap-3 p-4 md:hidden">
         <div className="flex gap-1">
           {dias.map((d, i) => (
@@ -174,7 +235,6 @@ export default function Portal() {
         })}
       </div>
 
-      {/* Desktop */}
       <div className="hidden min-h-0 flex-1 flex-col overflow-auto p-5 pl-6 md:flex">
         <div className="mb-3.5 flex flex-wrap items-baseline gap-5 num">
           <div className="flex items-baseline gap-1.5"><span className="text-[22px] font-semibold tracking-tight">{dur(total)}</span><span className="text-[13px] text-muted">planificadas</span></div>
@@ -259,14 +319,14 @@ export default function Portal() {
       </div>
 
       <section className="border-t border-border px-4 py-4 md:px-6">
-        <h2 className="mb-3 text-base font-semibold">Mi pago</h2>
+        <h2 className="mb-3 text-base font-semibold">Salario estimado</h2>
         {cargandoNomina && !nomina ? (
-          <p className="text-sm text-muted">Cargando estimación…</p>
+          <p className="text-sm text-muted">Calculando…</p>
         ) : nomina ? (
           <div className="mx-auto flex max-w-3xl flex-col gap-3">
             <div className={cx('rounded-xl border border-border bg-surface p-4', cargandoNomina && 'opacity-60')}>
               <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">
-                Estimación · {periodoPago.etiqueta}
+                {periodoPago.etiqueta}
               </div>
               {nomina.estimacion.excluida ? (
                 <p className="text-sm text-muted">No estás incluida en la nómina.</p>
@@ -286,7 +346,7 @@ export default function Portal() {
               )}
             </div>
             <div>
-              <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">Histórico pagado</div>
+              <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">Pagos recibidos</div>
               {estado.pagos.length === 0 ? (
                 <p className="text-[13px] text-muted">Aún no hay periodos pagados.</p>
               ) : (
@@ -308,9 +368,49 @@ export default function Portal() {
             </div>
           </div>
         ) : (
-          <p className="text-sm text-muted">Cargando estimación…</p>
+          <p className="text-sm text-muted">Calculando…</p>
         )}
       </section>
+
+      <Modal
+        open={editar}
+        onClose={() => setEditar(false)}
+        title="Mis datos"
+        footer={
+          <>
+            <div className="flex-1" />
+            <Button onClick={() => setEditar(false)}>Cerrar</Button>
+            <Button variant="primary" disabled={guardando} onClick={() => void guardarPerfil()}>{guardando ? 'Guardando…' : 'Guardar'}</Button>
+          </>
+        }
+      >
+        <form className="flex flex-col gap-3" onSubmit={guardarPerfil}>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold">Nombre</span>
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputCls} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold">Usuario</span>
+            <input value={usuario} onChange={(e) => setUsuario(e.target.value)} className={inputCls} autoComplete="username" />
+          </label>
+          <div className="mt-1 border-t border-border pt-3">
+            <p className="mb-2 text-xs font-semibold">Cambiar clave</p>
+            <label className="mb-2 flex flex-col gap-1.5">
+              <span className="text-[11px] text-muted">Clave actual</span>
+              <input type="password" value={passwordActual} onChange={(e) => setPasswordActual(e.target.value)} className={inputCls} autoComplete="current-password" />
+            </label>
+            <label className="mb-2 flex flex-col gap-1.5">
+              <span className="text-[11px] text-muted">Clave nueva</span>
+              <input type="password" value={passwordNueva} onChange={(e) => setPasswordNueva(e.target.value)} className={inputCls} autoComplete="new-password" />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11px] text-muted">Repetir clave nueva</span>
+              <input type="password" value={passwordNueva2} onChange={(e) => setPasswordNueva2(e.target.value)} className={inputCls} autoComplete="new-password" />
+            </label>
+          </div>
+          {errorPerfil && <p className="rounded-lg bg-error-bg px-3 py-2 text-[13px] text-error-fg">{errorPerfil}</p>}
+        </form>
+      </Modal>
     </div>
   );
 }

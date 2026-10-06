@@ -51,7 +51,7 @@ export interface LoginRes {
 
 export interface PortalEstado {
   version: number;
-  empleada: Omit<Empleada, 'tarifaCent' | 'usuario' | 'tieneAccesoPortal'>;
+  empleada: Omit<Empleada, 'tarifaCent' | 'tieneAccesoPortal'> & { usuario?: string | null };
   empleadas: Omit<Empleada, 'tarifaCent' | 'usuario' | 'tieneAccesoPortal'>[];
   turnos: Turno[];
   registros: Registro[];
@@ -83,6 +83,8 @@ export const api = {
 
   portalEstado: () => pedir<PortalEstado>('GET', '/portal/estado'),
   portalNomina: (inicio: string, fin: string) => pedir<PortalNomina>('GET', `/portal/nomina?inicio=${inicio}&fin=${fin}`),
+  portalPerfil: (datos: { nombre?: string; usuario?: string; passwordActual?: string; passwordNueva?: string }) =>
+    pedir<PortalEstado['empleada']>('PATCH', '/portal/perfil', datos),
 
   estado: () => pedir<State>('GET', '/estado'),
   sync: (ops: SyncOps) => pedir<void>('POST', '/sync', ops),

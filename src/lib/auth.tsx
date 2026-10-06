@@ -17,6 +17,7 @@ interface AuthApi {
   cargando: boolean;
   login: (usuario: string, password: string) => Promise<Sesion>;
   logout: () => void;
+  actualizarPerfil: (perfil: Partial<Perfil>) => void;
 }
 
 const Ctx = createContext<AuthApi | null>(null);
@@ -78,7 +79,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     aplicar(null);
   }, [aplicar]);
 
-  const value = useMemo(() => ({ sesion, cargando, login, logout }), [sesion, cargando, login, logout]);
+  const actualizarPerfil = useCallback((perfil: Partial<Perfil>) => {
+    setSesion((s) => (s ? { ...s, perfil: { ...s.perfil, ...perfil } } : s));
+  }, []);
+
+  const value = useMemo(
+    () => ({ sesion, cargando, login, logout, actualizarPerfil }),
+    [sesion, cargando, login, logout, actualizarPerfil],
+  );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
