@@ -96,7 +96,6 @@ export default function Portal() {
     setPasswordNueva('');
     setPasswordNueva2('');
     setErrorPerfil(null);
-    setOkPerfil(false);
     setEditar(true);
   };
 
