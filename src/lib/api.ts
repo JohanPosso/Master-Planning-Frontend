@@ -51,7 +51,8 @@ export interface LoginRes {
 
 export interface PortalEstado {
   version: number;
-  empleada: Empleada;
+  empleada: Omit<Empleada, 'tarifaCent' | 'usuario' | 'tieneAccesoPortal'>;
+  empleadas: Omit<Empleada, 'tarifaCent' | 'usuario' | 'tieneAccesoPortal'>[];
   turnos: Turno[];
   registros: Registro[];
   pagos: PeriodoPago[];
