@@ -69,11 +69,16 @@ export const inputCls = 'h-9 rounded-lg border border-border bg-bg px-3 text-sm 
 
 export function PageHeader({ title, children, badge }: { title: string; children?: ReactNode; badge?: ReactNode }) {
   return (
-    <header className="no-print flex min-h-[68px] flex-none flex-wrap items-center gap-2.5 border-b border-border px-4 py-3 md:px-6">
-      <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-      {badge}
-      <div className="flex-1" />
-      {children}
+    <header className="no-print flex flex-none flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center md:px-6">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        {badge}
+      </div>
+      {children && (
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:justify-end">
+          {children}
+        </div>
+      )}
     </header>
   );
 }
