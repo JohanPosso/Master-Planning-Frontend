@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { endOfMonth, startOfMonth } from 'date-fns';
 import { LogOut, Moon, Sun } from 'lucide-react';
 import { useAuth, mensajeError } from '../lib/auth';
 import { api, type PortalEstado, type PortalNomina } from '../lib/api';
 import { colorVars } from '../lib/theme';
-import { capital, diaIdx, diasSemana, dur, eur, fmt, iso, lunesDe, minutos, rangoTramos } from '../lib/time';
+import { capital, diaIdx, diasSemana, dur, eur, fmt, iso, lunesDe, minutos, rangoSemana, rangoTramos } from '../lib/time';
 import { aplicarTema, type Tema } from '../lib/theme';
 import { ChipBody } from '../components/ShiftChip';
 import { WeekSelector } from '../components/WeekSelector';
@@ -16,6 +15,7 @@ export default function Portal() {
   const [tema, setTema] = useState<Tema>((localStorage.getItem('jornada:tema') as Tema) || 'claro');
   const [estado, setEstado] = useState<PortalEstado | null>(null);
   const [nomina, setNomina] = useState<PortalNomina | null>(null);
+  const [cargandoNomina, setCargandoNomina] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lunes, setLunes] = useState(() => lunesDe(new Date()));
   const [dir, setDir] = useState(0);
@@ -32,10 +32,7 @@ export default function Portal() {
     (async () => {
       try {
         const e = await api.portalEstado();
-        if (!vivo) return;
-        setEstado(e);
-        const n = await api.portalNomina(iso(startOfMonth(new Date())), iso(endOfMonth(new Date())));
-        if (vivo) setNomina(n);
+        if (vivo) setEstado(e);
       } catch (err) {
         if (vivo) setError(mensajeError(err));
       }
@@ -46,6 +43,30 @@ export default function Portal() {
   const dias = useMemo(() => diasSemana(lunes), [lunes]);
   const fechas = useMemo(() => dias.map(iso), [dias]);
   const hoy = iso(new Date());
+
+  const periodoPago = useMemo(() => {
+    if (vista === 'dia') {
+      const f = fechas[dia];
+      return { inicio: f, fin: f, etiqueta: capital(fmt(dias[dia], 'EEEE d MMM')) };
+    }
+    return {
+      inicio: fechas[0],
+      fin: fechas[6],
+      etiqueta: rangoSemana(lunes),
+    };
+  }, [vista, fechas, dia, dias, lunes]);
+
+  useEffect(() => {
+    if (!estado) return;
+    let vivo = true;
+    setCargandoNomina(true);
+    api
+      .portalNomina(periodoPago.inicio, periodoPago.fin)
+      .then((n) => { if (vivo) setNomina(n); })
+      .catch((err) => { if (vivo) setError(mensajeError(err)); })
+      .finally(() => { if (vivo) setCargandoNomina(false); });
+    return () => { vivo = false; };
+  }, [estado, periodoPago.inicio, periodoPago.fin]);
 
   const emps = estado?.empleadas ?? [];
   const publicada = estado?.semanas.some((s) => s.lunes === iso(lunes)) ?? false;
@@ -241,12 +262,18 @@ export default function Portal() {
 
       <section className="border-t border-border px-4 py-4 md:px-6">
         <h2 className="mb-3 text-base font-semibold">Mi pago</h2>
-        {nomina ? (
+        {cargandoNomina && !nomina ? (
+          <p className="text-sm text-muted">Cargando estimación…</p>
+        ) : nomina ? (
           <div className="mx-auto flex max-w-3xl flex-col gap-3">
-            <div className="rounded-xl border border-border bg-surface p-4">
-              <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">Estimación del mes</div>
+            <div className={cx('rounded-xl border border-border bg-surface p-4', cargandoNomina && 'opacity-60')}>
+              <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">
+                Estimación · {periodoPago.etiqueta}
+              </div>
               {nomina.estimacion.excluida ? (
                 <p className="text-sm text-muted">No estás incluida en la nómina.</p>
+              ) : nomina.estimacion.minutos === 0 ? (
+                <p className="text-sm text-muted">Sin horas en este periodo del calendario.</p>
               ) : (
                 <>
                   <div className="text-2xl font-semibold tabular-nums">{eur(nomina.estimacion.importeCent)}</div>
@@ -262,11 +289,11 @@ export default function Portal() {
             </div>
             <div>
               <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">Histórico pagado</div>
-              {nomina.historico.length === 0 && estado.pagos.length === 0 ? (
+              {estado.pagos.length === 0 ? (
                 <p className="text-[13px] text-muted">Aún no hay periodos pagados.</p>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {(nomina.historico.length ? nomina.historico : estado.pagos).map((p) => {
+                  {estado.pagos.map((p) => {
                     const linea = p.lineas[0];
                     return (
                       <div key={p.id} className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
