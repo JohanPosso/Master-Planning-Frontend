@@ -1,4 +1,4 @@
-import type { Ajustes, Empleada, PeriodoPago, Perfil, Plantilla, Registro, Reglas, Rol, Semana, State, Turno } from './types';
+import type { Ajustes, Empleada, Fichaje, FichajeConfig, PeriodoPago, Perfil, Plantilla, Registro, Reglas, Rol, Semana, State, Turno } from './types';
 import type { SyncOps } from './sync';
 
 /** En desarrollo Vite redirige /api al backend (vite.config.ts). En producción: VITE_API_URL. */
@@ -74,6 +74,24 @@ export interface PortalNomina {
   historico: PeriodoPago[];
 }
 
+/** Bloque de fichaje del portal. `ahora` es la hora del servidor (la que se registra al fichar). */
+export interface ResumenFichaje {
+  ahora: string;
+  zonaHoraria: string;
+  hoy: string;
+  minutoActual: number;
+  toca: 'entrada' | 'salida';
+  dentroDesde: number | null;
+  minutosHoy: number;
+  fichajesHoy: Fichaje[];
+  turnoHoy: Turno | null;
+  semana: { lunes: string; minutosFichados: number; minutosPlanificados: number };
+  historial: { fecha: string; fichajes: Fichaje[]; minutos: number; incompleto: boolean }[];
+  geocerca: { activa: boolean; radioM: number };
+}
+
+export interface Ubicacion { latitud: number; longitud: number; precisionM?: number }
+
 export type EmpleadaWrite = Empleada & { password?: string; quitarAcceso?: boolean };
 
 export const api = {
@@ -83,6 +101,9 @@ export const api = {
 
   portalEstado: () => pedir<PortalEstado>('GET', '/portal/estado'),
   portalNomina: (inicio: string, fin: string) => pedir<PortalNomina>('GET', `/portal/nomina?inicio=${inicio}&fin=${fin}`),
+  portalFichaje: () => pedir<ResumenFichaje>('GET', '/portal/fichaje'),
+  fichar: (tipo: 'entrada' | 'salida', ubicacion?: Ubicacion) =>
+    pedir<{ fichaje: Fichaje; registro: Registro | null }>('POST', '/portal/fichajes', { tipo, ubicacion }),
   portalPerfil: (datos: { nombre?: string; usuario?: string; passwordActual?: string; passwordNueva?: string }) =>
     pedir<PortalEstado['empleada']>('PATCH', '/portal/perfil', datos),
 
@@ -112,4 +133,7 @@ export const api = {
 
   setReglas: (r: Partial<Reglas>) => pedir<Reglas>('PATCH', '/reglas', r),
   setAjustes: (a: Partial<Ajustes>) => pedir<Ajustes>('PATCH', '/ajustes', a),
+
+  fichajesNovedades: (desde: string) => pedir<{ desde: string; fichajes: Fichaje[]; registros: Registro[] }>('GET', `/fichajes/novedades?desde=${desde}`),
+  setFichajeConfig: (c: FichajeConfig) => pedir<FichajeConfig>('PUT', '/fichaje/config', c),
 };

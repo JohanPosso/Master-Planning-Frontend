@@ -1,13 +1,34 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { addDays, endOfMonth, startOfMonth } from 'date-fns';
 import { colorVars } from '../lib/theme';
 import { activas, avisosSemana, cobertura, jornada } from '../lib/rules';
-import { capital, diaIdx, diasSemana, dur, eur, fmt, iso, lunesDe, minutos, rangoTramos } from '../lib/time';
+import { capital, diaIdx, diasSemana, dur, eur, fmt, hhmm, iso, lunesDe, minutos, rangoTramos } from '../lib/time';
+import { agruparFichajes, estadoDia } from '../lib/fichaje';
+import type { Fichaje, Turno } from '../lib/types';
 import { useStore } from '../store';
 import { Button, Card, PageHeader, cx } from '../components/ui';
 import { AvisoItem } from '../components/AvisoItem';
 import { calcularPeriodo } from './Nomina';
+
+/** Minuto actual del día; se actualiza solo para que el estado «sin fichar» avance sin recargar. */
+function useMinutoActual() {
+  const calc = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+  const [m, setM] = useState(calc);
+  useEffect(() => { const t = setInterval(() => setM(calc()), 30_000); return () => clearInterval(t); }, []);
+  return m;
+}
+
+const MARGEN_RETRASO_MIN = 5;
+
+/** Estado del fichaje de hoy en una línea: dentro, ya salió, o sin fichar (en aviso si ya debería haber entrado). */
+function EstadoFichaje({ fichajes, turno, minutoActual }: { fichajes: Fichaje[]; turno?: Turno; minutoActual: number }) {
+  const e = estadoDia(fichajes);
+  if (e.dentro) return <span className="flex items-center gap-1.5 text-[11px] font-semibold"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ok-solid" />Dentro desde {hhmm(e.abierta!)}</span>;
+  if (e.pares.length) return <span className="text-[11px] opacity-80">Salió a las {hhmm(e.pares.at(-1)!.fin)} · {dur(e.minutos)}</span>;
+  if (turno && turno.tramos[0].inicio + MARGEN_RETRASO_MIN <= minutoActual) return <span className="text-[11px] font-semibold text-warn-fg">Sin fichar</span>;
+  return <span className="text-[11px] opacity-60">Aún no ha fichado</span>;
+}
 
 export default function Inicio() {
   const { state } = useStore();
@@ -18,7 +39,13 @@ export default function Inicio() {
   const semPay = (l: Date) => pagables.reduce((a, e) => a + semMin(l, e.id), 0);
   const esta = semPay(lunes), pasada = semPay(addDays(lunes, -7));
   const mes = useMemo(() => calcularPeriodo(state, startOfMonth(hoyD), endOfMonth(hoyD)), [state]); // eslint-disable-line react-hooks/exhaustive-deps
-  const trabajan = emps.map(e => ({ e, t: state.turnos.find(t => t.empleadaId === e.id && t.fecha === hoy) })).filter(x => x.t).sort((a, b) => a.t!.tramos[0].inicio - b.t!.tramos[0].inicio);
+  const minutoActual = useMinutoActual();
+  const fichajesHoy = useMemo(() => agruparFichajes(state.fichajes.filter(f => f.fecha === hoy)), [state.fichajes, hoy]);
+  const fichDe = (id: string) => fichajesHoy.get(`${id}|${hoy}`) ?? [];
+  // Trabajan hoy: quien tiene turno y también quien ha fichado sin tenerlo (extra).
+  const inicioDe = (x: { e: { id: string }; t?: Turno }) => x.t?.tramos[0].inicio ?? fichDe(x.e.id)[0]?.minuto ?? 0;
+  const trabajan = emps.map(e => ({ e, t: state.turnos.find(t => t.empleadaId === e.id && t.fecha === hoy) })).filter(x => x.t || fichDe(x.e.id).length).sort((a, b) => inicioDe(a) - inicioDe(b));
+  const dentroAhora = trabajan.filter(x => estadoDia(fichDe(x.e.id)).dentro).length;
   const descansan = emps.filter(e => !trabajan.some(x => x.e.id === e.id));
   const max = Math.max(1, ...emps.map(e => semMin(lunes, e.id)));
   const semanas = Array.from({ length: 8 }, (_, i) => addDays(lunes, (i - 7) * 7));
@@ -41,10 +68,10 @@ export default function Inicio() {
         <Card className="flex flex-col gap-1.5 p-4 md:col-span-3"><span className="text-xs font-medium text-muted">Horas esta semana · nómina</span><span className="text-[28px] font-semibold tracking-tight">{dur(esta)}</span><span className="text-xs text-muted"><span className={cx('font-semibold', esta >= pasada ? 'text-ok-fg' : 'text-warn-fg')}>{esta >= pasada ? '+' : '−'}{dur(Math.abs(esta - pasada))}</span> vs. semana pasada</span></Card>
         <Card className="flex flex-col gap-1.5 p-4 md:col-span-3"><span className="text-xs font-medium text-muted">Coste estimado · {fmt(hoyD, 'MMMM')}</span><span className="text-[28px] font-semibold tracking-tight">{eur(mes.total)}</span><span className="text-xs text-muted">{mes.pendientes} días sin confirmar</span></Card>
         <Card className="flex flex-col gap-2.5 p-4 md:col-span-6">
-          <div className="flex justify-between gap-2"><span className="text-xs font-medium text-muted">Hoy trabajan</span><span className="text-xs text-muted">Descansan: {descansan.length ? descansan.map(e => e.nombre).join(', ') : 'nadie'}</span></div>
+          <div className="flex justify-between gap-2"><span className="text-xs font-medium text-muted">Hoy trabajan{dentroAhora > 0 && <span className="text-ok-fg"> · {dentroAhora} dentro ahora</span>}</span><span className="text-xs text-muted">Descansan: {descansan.length ? descansan.map(e => e.nombre).join(', ') : 'nadie'}</span></div>
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             {trabajan.map(({ e, t }) => (
-              <div key={e.id} style={colorVars(e.color)} className="flex flex-col gap-0.5 rounded-lg border border-c-line bg-c-tint px-2.5 py-2 text-c-fg"><span className="text-[13px] font-semibold">{e.nombre}</span><span className="text-xs">{rangoTramos(t!.tramos)}</span></div>
+              <div key={e.id} style={colorVars(e.color)} className="flex flex-col gap-0.5 rounded-lg border border-c-line bg-c-tint px-2.5 py-2 text-c-fg"><span className="text-[13px] font-semibold">{e.nombre}</span><span className="text-xs">{t ? rangoTramos(t.tramos) : 'Sin turno (extra)'}</span><EstadoFichaje fichajes={fichDe(e.id)} turno={t} minutoActual={minutoActual} /></div>
             ))}
           </div>
         </Card>

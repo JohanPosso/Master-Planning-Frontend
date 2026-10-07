@@ -10,7 +10,12 @@ export interface Empleada {
 }
 export interface Plantilla { id: string; nombre: string; tramos: Tramo[] }
 export interface Turno { id: string; empleadaId: string; fecha: string; tramos: Tramo[]; plantillaId?: string; avisosIgnorados?: string[] }
-export interface Registro { id: string; empleadaId: string; fecha: string; tramos: Tramo[]; nota?: string; estado: 'previsto' | 'confirmado' }
+export interface Registro { id: string; empleadaId: string; fecha: string; tramos: Tramo[]; nota?: string; estado: 'previsto' | 'confirmado'; origen?: 'fichaje' }
+
+/** Marca de entrada/salida (solo lectura): `minuto` en hora local del negocio, `marca` el instante exacto. */
+export interface Fichaje { id: string; empleadaId: string; fecha: string; minuto: number; tipo: 'entrada' | 'salida'; marca: string; distanciaM?: number }
+export interface Geocerca { activa: boolean; latitud: number | null; longitud: number | null; radioM: number }
+export interface FichajeConfig { geocerca: Geocerca }
 export interface LineaPago { empleadaId: string; minutos: number; importeCent: number; tarifaCent?: number; recargosCent?: number }
 export interface PeriodoPago { id: string; inicio: string; fin: string; etiqueta: string; pagadoEn: string; totalCent: number; lineas: LineaPago[] }
 export interface Semana { lunes: string; publicada: boolean }
@@ -30,6 +35,8 @@ export interface State {
   version: number;
   empleadas: Empleada[]; plantillas: Plantilla[]; turnos: Turno[]; registros: Registro[];
   pagos: PeriodoPago[]; semanas: Semana[]; reglas: Reglas; ajustes: Ajustes;
+  /** Fichajes de los últimos ~2 meses (se refrescan solos) y su configuración. */
+  fichajes: Fichaje[]; fichaje: FichajeConfig;
 }
 export interface Aviso { nivel: 'error' | 'warn'; fecha?: string; empleadaId?: string; titulo: string; detalle: string }
 

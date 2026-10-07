@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { addDays, addMonths, eachDayOfInterval, endOfMonth, startOfMonth } from 'date-fns';
-import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
-import type { Empleada, Registro as Reg, Turno } from '../lib/types';
+import { ChevronLeft, ChevronRight, Check, Fingerprint } from 'lucide-react';
+import type { Empleada, Fichaje, Registro as Reg, Turno } from '../lib/types';
+import { estadoDia } from '../lib/fichaje';
 import { colorVars } from '../lib/theme';
 import { activas, jornada } from '../lib/rules';
 import { capital, diasSemana, diff, dur, fmt, hhmm, iso, lunesDe, minutos, rangoSemana, rangoTramos, toMin } from '../lib/time';
@@ -9,14 +10,37 @@ import { tramosValidos, useStore } from '../store';
 import { Badge, Button, Card, PageHeader, Segmented, cx } from '../components/ui';
 
 type Vista = 'dia' | 'semana' | 'mes';
+
+/** Lo que fichó la empleada ese día, en una línea; avisa si quedó una entrada sin salida en un día pasado. */
+function LineaFichajes({ fichajes, registro, pasado }: { fichajes: Fichaje[]; registro?: Reg; pasado: boolean }) {
+  if (!fichajes.length) return null;
+  // Solo avisa mientras nadie lo haya resuelto: si ya hay registro de horas, el encargado lo completó.
+  const incompleto = pasado && !registro && estadoDia(fichajes).dentro;
+  return (
+    <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted" title={registro?.origen === 'fichaje' ? 'Horas tomadas de los fichajes' : 'Horas ajustadas a mano'}>
+      <Fingerprint size={12} className={registro?.origen === 'fichaje' ? 'text-ok-fg' : ''} />
+      <span className="num">{fichajes.map(f => `${f.tipo === 'entrada' ? '↘' : '↗'} ${hhmm(f.minuto)}`).join('  ')}</span>
+      {incompleto && <Badge tone="warn">Falta salida</Badge>}
+    </span>
+  );
+}
 const COLS = '150px 170px 190px 84px 76px minmax(120px,1fr) 150px';
 
 function useFilaRegistro(e: Empleada, fecha: string, turno: Turno | undefined, registro: Reg | undefined, hoy: string) {
-  const { acciones } = useStore();
+  const { state, acciones } = useStore();
+  const fichajes = useMemo(() => state.fichajes.filter(f => f.empleadaId === e.id && f.fecha === fecha), [state.fichajes, e.id, fecha]);
   const base = registro?.tramos ?? turno?.tramos ?? [];
-  const [vals, setVals] = useState(base.map(t => ({ a: hhmm(t.inicio), b: hhmm(t.fin) })));
+  // Sin registro ni turno pero con fichajes (p. ej. olvidó la salida): se parte de lo fichado y la salida queda por completar.
+  const valsIniciales = () => {
+    if (base.length) return base.map(t => ({ a: hhmm(t.inicio), b: hhmm(t.fin) }));
+    const { pares, abierta } = estadoDia(fichajes);
+    return [...pares.map(p => ({ a: hhmm(p.inicio), b: hhmm(p.fin) })), ...(abierta !== null ? [{ a: hhmm(abierta), b: '' }] : [])].slice(0, 2);
+  };
+  const [vals, setVals] = useState(valsIniciales);
   const [nota, setNota] = useState(registro?.nota ?? '');
-  useEffect(() => { setVals(base.map(t => ({ a: hhmm(t.inicio), b: hhmm(t.fin) }))); setNota(registro?.nota ?? ''); }, [registro, turno]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Por contenido, no por identidad: un refresco que no cambia nada no debe reiniciar lo que se está escribiendo.
+  const huella = JSON.stringify([registro, turno?.tramos, fichajes.map(f => f.id)]);
+  useEffect(() => { setVals(valsIniciales()); setNota(registro?.nota ?? ''); }, [huella]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const parsed = vals.filter(v => v.a && v.b).map(v => ({ inicio: toMin(v.a), fin: toMin(v.b) }));
   const ok = parsed.length === vals.length && tramosValidos(parsed);
@@ -30,16 +54,19 @@ function useFilaRegistro(e: Empleada, fecha: string, turno: Turno | undefined, r
   const inp = (difiere: boolean) => cx('num h-[30px] w-[78px] rounded-md border px-1.5 text-center text-[13px] font-semibold outline-none focus:border-primary focus:shadow-[0_0_0_3px_var(--primary-tint)]',
     difiere ? 'border-warn-line bg-warn-bg text-warn-fg' : futuro && !registro ? 'border-border bg-transparent font-normal text-muted' : 'border-border bg-bg');
 
-  return { vals, setVals, nota, setNota, ok, plan, real, df, futuro, estado, guardar, blur, tecla, inp, turno };
+  return { vals, setVals, nota, setNota, ok, plan, real, df, futuro, estado, guardar, blur, tecla, inp, turno, fichajes };
 }
 
 function FilaDesktop({ e, fecha, turno, registro, hoy }: { e: Empleada; fecha: string; turno?: Turno; registro?: Reg; hoy: string }) {
-  const { vals, setVals, nota, setNota, real, df, futuro, estado, guardar, blur, tecla, inp, turno: t } = useFilaRegistro(e, fecha, turno, registro, hoy);
+  const { vals, setVals, nota, setNota, real, df, futuro, estado, guardar, blur, tecla, inp, turno: t, fichajes } = useFilaRegistro(e, fecha, turno, registro, hoy);
 
   return (
     <div style={{ ...colorVars(e.color), gridTemplateColumns: COLS }} className={cx('grid items-center gap-2 border-b border-border px-4 py-2.5', futuro && !registro && 'opacity-70')}
       onKeyDown={tecla}>
-      <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-c-solid" /><span className="text-[13px] font-semibold">{e.nombre}</span></div>
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-c-solid" /><span className="text-[13px] font-semibold">{e.nombre}</span></div>
+        <LineaFichajes fichajes={fichajes} registro={registro} pasado={fecha < hoy} />
+      </div>
       <span className="num text-[13px] text-muted">{t ? rangoTramos(t.tramos) : 'Extra'}</span>
       <div className="flex flex-col gap-1">
         {vals.map((v, k) => (
@@ -62,7 +89,7 @@ function FilaDesktop({ e, fecha, turno, registro, hoy }: { e: Empleada; fecha: s
 }
 
 function FilaMobile({ e, fecha, turno, registro, hoy }: { e: Empleada; fecha: string; turno?: Turno; registro?: Reg; hoy: string }) {
-  const { vals, setVals, nota, setNota, real, df, futuro, estado, guardar, blur, tecla, inp, turno: t } = useFilaRegistro(e, fecha, turno, registro, hoy);
+  const { vals, setVals, nota, setNota, real, df, futuro, estado, guardar, blur, tecla, inp, turno: t, fichajes } = useFilaRegistro(e, fecha, turno, registro, hoy);
 
   return (
     <div style={colorVars(e.color)} className={cx('rounded-xl border border-border bg-surface p-3.5', futuro && !registro && 'opacity-70')} onKeyDown={tecla}>
@@ -75,6 +102,7 @@ function FilaMobile({ e, fecha, turno, registro, hoy }: { e: Empleada; fecha: st
       </div>
       <div className="mb-3 text-[13px] text-muted">
         Planificado: <span className="num font-medium text-text">{t ? rangoTramos(t.tramos) : 'Extra'}</span>
+        <div className="mt-1"><LineaFichajes fichajes={fichajes} registro={registro} pasado={fecha < hoy} /></div>
       </div>
       <div className="mb-3 flex flex-col gap-2">
         <span className="text-[11px] font-medium uppercase tracking-[.06em] text-muted">Horas reales</span>
@@ -120,7 +148,8 @@ export default function Registro() {
 
   const grupos = useMemo(() => dias.map(d => {
     const f = iso(d);
-    const filas = emps.map(e => ({ e, ...jornada(state, e.id, f) })).filter(r => r.turno || r.registro);
+    // También quien fichó sin turno ni registro aún (entrada abierta o salida olvidada): hay que revisarlo.
+    const filas = emps.map(e => ({ e, ...jornada(state, e.id, f) })).filter(r => r.turno || r.registro || state.fichajes.some(x => x.empleadaId === r.e.id && x.fecha === f));
     const descansan = emps.filter(e => !filas.some(r => r.e.id === e.id)).map(e => e.nombre);
     return { d, f, filas, descansan, tot: filas.reduce((a, r) => a + minutos(r.tramos), 0) };
   }).filter(g => g.filas.length), [state, dias.map(iso).join(), filtro]); // eslint-disable-line react-hooks/exhaustive-deps

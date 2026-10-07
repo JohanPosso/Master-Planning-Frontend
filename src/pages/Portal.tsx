@@ -1,12 +1,14 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { LogOut, Moon, Settings2, Sun } from 'lucide-react';
+import { Toaster } from 'sonner';
 import { useAuth, mensajeError } from '../lib/auth';
 import { api, type PortalEstado, type PortalNomina } from '../lib/api';
 import { colorVars } from '../lib/theme';
 import { capital, diaIdx, diasSemana, dur, eur, fmt, iso, lunesDe, minutos, rangoSemana, rangoTramos } from '../lib/time';
 import { aplicarTema, type Tema } from '../lib/theme';
 import { ChipBody } from '../components/ShiftChip';
+import { Fichador } from '../components/Fichador';
 import { WeekSelector } from '../components/WeekSelector';
 import { Badge, Button, Modal, PageHeader, Segmented, cx, inputCls } from '../components/ui';
 
@@ -173,6 +175,8 @@ export default function Portal() {
         </button>
         <Button onClick={logout}><LogOut size={15} />Salir</Button>
       </header>
+
+      <Fichador />
 
       <PageHeader
         title="Horario"
@@ -410,6 +414,7 @@ export default function Portal() {
           {errorPerfil && <p className="rounded-lg bg-error-bg px-3 py-2 text-[13px] text-error-fg">{errorPerfil}</p>}
         </form>
       </Modal>
+      <Toaster position="bottom-center" theme={tema === 'oscuro' ? 'dark' : 'light'} toastOptions={{ style: { background: 'var(--text)', color: 'var(--bg)', border: '0', fontFamily: 'Geist, sans-serif' } }} />
     </div>
   );
 }

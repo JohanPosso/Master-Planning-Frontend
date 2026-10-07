@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { toast } from 'sonner';
 import type { Empleada, PeriodoPago, Plantilla, Registro, State, Tramo, Turno } from './lib/types';
 import { api, mensajeError, type EmpleadaWrite } from './lib/api';
-import { diffEstado, sinCambios } from './lib/sync';
+import { diffEstado, fusionarNovedades, sinCambios } from './lib/sync';
+import { addDays } from 'date-fns';
 import { iso, uid } from './lib/time';
 import { aplicarTema, type Tema } from './lib/theme';
 
@@ -27,6 +28,7 @@ interface Api {
     eliminarPlantilla: (id: string) => void;
     setReglas: (r: Partial<State['reglas']>) => void;
     setAjustes: (a: Partial<State['ajustes']>) => void;
+    setFichajeConfig: (c: State['fichaje']) => Promise<void>;
   };
 }
 const Ctx = createContext<Api | null>(null);
@@ -50,6 +52,12 @@ function crearMotor(setState: (s: State) => void, setError: (e: string | null) =
 
   const aplicar = (fn: Mut) => { if (!ref.estado) return; ref.estado = fn(ref.estado); setState(ref.estado); };
   const guardarEnHistorial = (s: State) => { hist.push(s); if (hist.length > MAX_HISTORIAL) hist.shift(); };
+  /** Cambio que viene de fuera (fichajes): se aplica al estado y a las instantáneas de «deshacer». */
+  const aplicarExterno = (fn: Mut, fnHistorial: Mut = fn) => {
+    if (!ref.estado) return;
+    for (let i = 0; i < hist.length; i++) hist[i] = fnHistorial(hist[i]);
+    aplicar(fn);
+  };
   const encolar = <T,>(tarea: () => Promise<T>) => { const p = cola.then(tarea); cola = p.catch(() => undefined); return p; };
 
   const cargar = async () => {
@@ -73,7 +81,8 @@ function crearMotor(setState: (s: State) => void, setError: (e: string | null) =
     const destino = hist.pop(), actual = ref.estado;
     if (!destino || !actual) return;
     const ops = diffEstado(actual, destino);
-    aplicar(() => destino);
+    // Los fichajes no se deshacen: son de las empleadas y de solo lectura.
+    aplicar(() => ({ ...destino, fichajes: actual.fichajes, fichaje: actual.fichaje }));
     toast('Cambio deshecho');
     if (!sinCambios(ops)) encolar(() => api.sync(ops)).catch(e => fallo(e, destino));
   };
@@ -161,10 +170,23 @@ function crearMotor(setState: (s: State) => void, setError: (e: string | null) =
     guardarPlantilla: p => optimista(s => ({ ...s, plantillas: upsert(s.plantillas, p, x => x.id === p.id) }), () => api.guardarPlantilla(p), 'Plantilla guardada'),
     eliminarPlantilla: id => optimista(s => ({ ...s, plantillas: s.plantillas.filter(p => p.id !== id) }), () => api.eliminarPlantilla(id), 'Plantilla eliminada'),
     setReglas: r => optimista(s => ({ ...s, reglas: { ...s.reglas, ...r } }), () => api.setReglas(r)),
-    setAjustes: a => optimista(s => ({ ...s, ajustes: { ...s.ajustes, ...a } }), () => api.setAjustes(a))
+    setAjustes: a => optimista(s => ({ ...s, ajustes: { ...s.ajustes, ...a } }), () => api.setAjustes(a)),
+    // Sin «deshacer»: se guarda en el servidor (que valida la geocerca) y luego se refleja.
+    setFichajeConfig: c => encolar(async () => {
+      const fichaje = await api.setFichajeConfig(c);
+      aplicarExterno(s => ({ ...s, fichaje }));
+      toast('Ajustes de fichaje guardados');
+    }).catch(e => fallo(e))
   };
 
-  return { cargar, deshacer, acciones };
+  /** Trae lo fichado desde ayer. En cola: nunca pisa un cambio del encargado que aún no llegó al servidor. */
+  const refrescarFichajes = () => encolar(async () => {
+    if (!ref.estado) return;
+    const n = await api.fichajesNovedades(iso(addDays(new Date(), -1)));
+    aplicarExterno(s => fusionarNovedades(s, n), s => fusionarNovedades(s, n, { historial: true }));
+  }).catch(() => undefined); // silencioso: se reintenta en el siguiente ciclo
+
+  return { cargar, deshacer, acciones, refrescarFichajes };
 }
 
 function PantallaCarga({ error, reintentar }: { error: string | null; reintentar: () => void }) {
@@ -188,9 +210,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [tema, setTemaS] = useState<Tema>(() => (localStorage.getItem('jornada:tema') as Tema) || (matchMedia('(prefers-color-scheme: dark)').matches ? 'oscuro' : 'claro'));
   const motor = useRef<ReturnType<typeof crearMotor>>();
   motor.current ??= crearMotor(setState, setError);
-  const { cargar, deshacer, acciones } = motor.current;
+  const { cargar, deshacer, acciones, refrescarFichajes } = motor.current;
 
   useEffect(() => { void cargar(); }, [cargar]);
+  // Fichajes en vivo: cada 30 s con la pestaña visible, y al volver a ella.
+  useEffect(() => {
+    const tick = () => { if (document.visibilityState === 'visible') void refrescarFichajes(); };
+    const t = setInterval(tick, 30_000);
+    document.addEventListener('visibilitychange', tick);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', tick); };
+  }, [refrescarFichajes]);
   useEffect(() => { aplicarTema(tema); localStorage.setItem('jornada:tema', tema); }, [tema]);
 
   useEffect(() => {

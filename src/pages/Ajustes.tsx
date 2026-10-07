@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
-import type { Plantilla, Reglas } from '../lib/types';
+import { ExternalLink, Loader2, MapPin, Plus, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import type { Geocerca, Plantilla, Reglas } from '../lib/types';
 import { desdeIso, dur, fmt, hhmm, minutos, toMin, uid } from '../lib/time';
 import { tramosValidos, useStore } from '../store';
 import { Button, Card, PageHeader, Segmented, Toggle, cx, inputCls } from '../components/ui';
@@ -56,9 +57,68 @@ function Hora({ value, onChange }: { value: number; onChange: (n: number) => voi
   return <input type="time" value={hhmm(value)} onChange={e => e.target.value && onChange(toMin(e.target.value))} className={cx(inputCls, 'h-8 w-[96px] text-[13px]')} />;
 }
 
+/** Geocerca opcional: solo se puede fichar a menos de `radioM` metros de la cafetería. */
+function AjustesFichaje() {
+  const { state, acciones } = useStore();
+  const g = state.fichaje.geocerca;
+  const [localizando, setLocalizando] = useState(false);
+  const guardar = (cambios: Partial<Geocerca>) => void acciones.setFichajeConfig({ geocerca: { ...g, ...cambios } });
+  const fijada = g.latitud !== null && g.longitud !== null;
+
+  const usarMiUbicacion = () => {
+    if (!('geolocation' in navigator)) return toast.error('Este navegador no permite obtener la ubicación');
+    setLocalizando(true);
+    navigator.geolocation.getCurrentPosition(
+      p => { setLocalizando(false); guardar({ latitud: +p.coords.latitude.toFixed(6), longitud: +p.coords.longitude.toFixed(6) }); },
+      e => { setLocalizando(false); toast.error(e.code === e.PERMISSION_DENIED ? 'Permite el acceso a la ubicación para fijar la cafetería' : 'No se pudo obtener la ubicación'); },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 }
+    );
+  };
+
+  return (
+    <>
+      <Card className="flex flex-col">
+        <div className="flex flex-col gap-0.5 border-b border-border px-4 py-4">
+          <span className="text-[15px] font-semibold">Fichaje de las empleadas</span>
+          <span className="text-xs leading-relaxed text-muted">Cada empleada ficha la entrada y la salida desde su portal. La hora la pone el servidor, no el móvil. Al fichar la salida, sus horas aparecen en «Registro de horas» como «por confirmar»; si las corriges, se respeta tu cambio.</span>
+        </div>
+        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-sm font-medium">Solo desde la cafetería</span>
+            <span className="text-xs text-muted">{fijada ? 'Pide la ubicación al fichar y la rechaza fuera del radio. Solo se guarda la distancia como prueba.' : 'Primero fija la ubicación de la cafetería.'}</span>
+          </div>
+          <div className={cx(!fijada && 'pointer-events-none opacity-45')}><Toggle on={g.activa} onChange={v => guardar({ activa: v })} label="Solo desde la cafetería" /></div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
+          <div className="flex min-w-[180px] flex-1 flex-col gap-0.5">
+            <span className="text-sm font-medium">Ubicación de la cafetería</span>
+            <span className="num text-xs text-muted">{fijada ? `${g.latitud!.toFixed(5)}, ${g.longitud!.toFixed(5)}` : 'Sin fijar'}</span>
+          </div>
+          {fijada && (
+            <a href={`https://www.openstreetmap.org/?mlat=${g.latitud}&mlon=${g.longitud}#map=18/${g.latitud}/${g.longitud}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-medium text-muted hover:text-text">
+              Ver en el mapa<ExternalLink size={12} />
+            </a>
+          )}
+          <Button onClick={usarMiUbicacion} disabled={localizando}>
+            {localizando ? <Loader2 size={15} className="animate-spin" /> : <MapPin size={15} />}{fijada ? 'Actualizar con mi ubicación' : 'Usar mi ubicación actual'}
+          </Button>
+        </div>
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div className="flex flex-col gap-0.5"><span className="text-sm font-medium">Radio permitido</span><span className="text-xs text-muted">Entre 25 m y 5 km. Se tolera la imprecisión del GPS (hasta 100 m).</span></div>
+          <Num value={g.radioM} onChange={v => guardar({ radioM: v })} suf="m" min={25} max={5000} />
+        </div>
+      </Card>
+      <Card className="flex flex-col gap-2 p-4 text-xs leading-relaxed text-muted">
+        <span className="text-sm font-semibold text-text">Registro de jornada</span>
+        <span>Los fichajes no se pueden editar ni borrar: las correcciones se hacen en «Registro de horas», que conserva el fichaje original al lado. Cada empleada puede consultar sus fichajes desde su portal.</span>
+      </Card>
+    </>
+  );
+}
+
 export default function Ajustes() {
   const { state, acciones, tema, setTema } = useStore();
-  const [tab, setTab] = useState<'turnos' | 'tarifas' | 'apariencia'>('turnos');
+  const [tab, setTab] = useState<'turnos' | 'tarifas' | 'fichaje' | 'apariencia'>('turnos');
   const [fest, setFest] = useState('');
   const r = state.reglas;
   const set = (p: Partial<Reglas>) => acciones.setReglas(p);
@@ -75,9 +135,9 @@ export default function Ajustes() {
   return (
     <div className="flex min-h-full flex-col">
       <PageHeader title="Ajustes">
-        <Segmented value={tab} onChange={setTab} options={[{ value: 'turnos', label: 'Turnos y reglas' }, { value: 'tarifas', label: 'Recargos y festivos' }, { value: 'apariencia', label: 'Apariencia' }]} />
+        <Segmented value={tab} onChange={setTab} options={[{ value: 'turnos', label: 'Turnos y reglas' }, { value: 'tarifas', label: 'Recargos y festivos' }, { value: 'fichaje', label: 'Fichaje' }, { value: 'apariencia', label: 'Apariencia' }]} />
       </PageHeader>
-      <div className="grid flex-1 items-start gap-5 p-4 md:p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      <div className="grid flex-1 content-start items-start gap-5 p-4 md:p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         {tab === 'turnos' && <>
           <Card className="overflow-hidden">
             <div className="flex items-center justify-between border-b border-border px-4 py-4"><div className="flex flex-col gap-0.5"><span className="text-[15px] font-semibold">Plantillas de turno</span><span className="text-xs text-muted">Aparecen en el panel lateral del horario para arrastrarlas.</span></div>
@@ -113,6 +173,7 @@ export default function Ajustes() {
             ))}
           </Card>
         </>}
+        {tab === 'fichaje' && <AjustesFichaje />}
         {tab === 'apariencia' && (
           <Card className="flex items-center justify-between gap-3 p-4">
             <div className="flex flex-col gap-0.5"><span className="text-sm font-semibold">Tema</span><span className="text-xs text-muted">Se guarda en este dispositivo.</span></div>

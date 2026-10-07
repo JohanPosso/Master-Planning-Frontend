@@ -23,7 +23,8 @@ npm test   # Vitest
 ## Qué funciona
 
 - **Login**: encargado (`admin`) o empleada (usuario + PIN asignado en Equipo).
-- **Portal empleada** (`/portal`): horario publicado y estimación/histórico de pago (solo lectura).
+- **Portal empleada** (`/portal`): **fichaje** (reloj con la hora del servidor, botón de entrada/salida, horas de hoy y de la semana, historial de 14 días), horario publicado y estimación/histórico de pago.
+- **Fichaje para el encargado**: estado en vivo en Inicio (dentro / salió / sin fichar), fichajes y aviso «Falta salida» en Registro de horas, y geocerca opcional en Ajustes → Fichaje. Se refresca solo cada 30 s, sin pisar lo que se está editando.
 - **Horario · Semana**: cuadrícula, drag & drop de turnos, plantillas, avisos, publicar/borrador, CSV/PDF.
 - **Horario · Día**: línea de tiempo 06:00–21:00 con ajuste de duración.
 - **Registro de horas**: prellenado, edición en línea, confirmación por fila o día.
