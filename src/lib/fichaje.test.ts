@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { Fichaje } from './types';
-import { agruparFichajes, estadoDia, minutoEn, minutosEnVivo } from './fichaje';
+import { agruparFichajes, esIpValida, estadoDia, minutoEn, minutosEnVivo, normalizarIp } from './fichaje';
+
+describe('IP del Wi-Fi', () => {
+  it('acepta IPv4 e IPv6 válidas', () => {
+    for (const ip of ['185.250.76.217', '10.0.0.1', '2a0c:5a80::1', '::1', '2001:0db8:0000:0000:0000:ff00:0042:8329']) expect(esIpValida(ip), ip).toBe(true);
+  });
+  it('rechaza textos que no son IP', () => {
+    for (const ip of ['', '185.250.76', '256.1.1.1', '185.250.76.217.1', 'FIBRAMEDIOS-M03664_5G', '1::2::3', 'abc']) expect(esIpValida(ip), ip).toBe(false);
+  });
+  it('normaliza espacios y el prefijo IPv4-mapeado', () => {
+    expect(normalizarIp('  185.250.76.217 ')).toBe('185.250.76.217');
+    expect(normalizarIp('::FFFF:185.250.76.217')).toBe('185.250.76.217');
+  });
+});
 
 let n = 0;
 const F = (tipo: Fichaje['tipo'], minuto: number, empleadaId = 'a', fecha = '2026-10-07'): Fichaje =>

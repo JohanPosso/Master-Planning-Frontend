@@ -32,6 +32,19 @@ export function agruparFichajes(fichajes: Fichaje[]) {
   return m;
 }
 
+/** IP sin espacios ni el prefijo IPv4-mapeado (`::ffff:1.2.3.4` → `1.2.3.4`), igual que en el servidor. */
+export const normalizarIp = (ip: string) => ip.trim().replace(/^::ffff:/i, '').toLowerCase();
+
+const OCTETO = '(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
+const IPV4 = new RegExp(`^${OCTETO}(\\.${OCTETO}){3}$`);
+/** IPv4 (185.250.76.217) o IPv6 (2a0c:5a80::1). El servidor vuelve a validarla. */
+export function esIpValida(ip: string) {
+  if (IPV4.test(ip)) return true;
+  if (!/^[0-9a-f:]+$/i.test(ip) || !ip.includes(':') || (ip.match(/::/g)?.length ?? 0) > 1) return false;
+  const grupos = ip.split(':');
+  return grupos.length <= 8 && grupos.every(g => g.length <= 4) && (ip.includes('::') || grupos.length === 8);
+}
+
 /** Minuto del día actual en una zona horaria, desplazado según el reloj del servidor. */
 export function minutoEn(timeZone: string, instante: Date) {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(instante).map(x => [x.type, x.value]));

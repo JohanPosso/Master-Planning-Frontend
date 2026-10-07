@@ -3,6 +3,7 @@ import { ExternalLink, Loader2, MapPin, Plus, Trash2, Wifi } from 'lucide-react'
 import { toast } from 'sonner';
 import type { FichajeConfig, Geocerca, Plantilla, Reglas } from '../lib/types';
 import { api, mensajeError } from '../lib/api';
+import { esIpValida, normalizarIp } from '../lib/fichaje';
 import { desdeIso, dur, fmt, hhmm, minutos, toMin, uid } from '../lib/time';
 import { tramosValidos, useStore } from '../store';
 import { Button, Card, PageHeader, Segmented, Toggle, cx, inputCls } from '../components/ui';
@@ -102,6 +103,15 @@ function AjustesFichaje() {
     const ips = c.red.ips.filter(x => x !== ip);
     guardar({ red: { activa: c.red.activa && ips.length > 0, ips } });
   };
+  // A mano: para dar de alta la red sin estar en la cafetería (p. ej. la IP que ve alguien allí en «cuál es mi IP»).
+  const [ipManual, setIpManual] = useState('');
+  const anadirIpManual = () => {
+    const ip = normalizarIp(ipManual);
+    if (!esIpValida(ip)) return toast.error('Escribe una IP válida, por ejemplo 185.250.76.217');
+    if (c.red.ips.includes(ip)) { toast('Esta red ya está guardada'); setIpManual(''); return; }
+    guardar({ red: { ...c.red, ips: [...c.red.ips, ip] } });
+    setIpManual('');
+  };
 
   return (
     <>
@@ -126,7 +136,7 @@ function AjustesFichaje() {
         <Fila titulo="Radio permitido" desc="Entre 25 m y 5 km. Se tolera la imprecisión del GPS (hasta 100 m).">
           <Num value={g.radioM} onChange={v => guardarGeocerca({ radioM: v })} suf="m" min={25} max={5000} />
         </Fila>
-        <Fila titulo="Por Wi-Fi de la cafetería" desc={c.red.ips.length ? 'Quien ficha conectada a esta red no necesita dar la ubicación. Funciona con la IP pública del router: si tu proveedor la cambia, vuelve a pulsar «Usar la red actual».' : 'Pulsa «Usar la red actual» estando conectado al Wi-Fi de la cafetería.'}>
+        <Fila titulo="Por Wi-Fi de la cafetería" desc={c.red.ips.length ? 'Quien ficha conectada a esta red no necesita dar la ubicación. Funciona con la IP pública del router: si tu proveedor la cambia, vuelve a añadirla.' : 'Añade la IP pública del Wi-Fi de la cafetería: pulsa «Usar la red actual» estando allí, o escríbela si alguien conectado la consulta en «cuál es mi IP».'}>
           <div className={cx(!c.red.ips.length && 'pointer-events-none opacity-45')}><Toggle on={c.red.activa} onChange={v => guardar({ red: { ...c.red, activa: v } })} label="Fichar por Wi-Fi" /></div>
         </Fila>
         <Fila titulo="Redes guardadas" desc={c.red.ips.length ? (
@@ -136,7 +146,12 @@ function AjustesFichaje() {
             </span>
           ))}</span>
         ) : 'Ninguna'} ultima>
-          <Button onClick={() => void usarRedActual()} disabled={leyendoRed}>{leyendoRed ? <Loader2 size={15} className="animate-spin" /> : <Wifi size={15} />}Usar la red actual</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <input value={ipManual} onChange={e => setIpManual(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') anadirIpManual(); }}
+              placeholder="IP pública, p. ej. 185.250.76.217" aria-label="IP del Wi-Fi de la cafetería" className={cx(inputCls, 'h-9 w-[230px] text-[13px]')} />
+            <Button onClick={anadirIpManual} disabled={!ipManual.trim()}><Plus size={15} />Añadir</Button>
+            <Button onClick={() => void usarRedActual()} disabled={leyendoRed}>{leyendoRed ? <Loader2 size={15} className="animate-spin" /> : <Wifi size={15} />}Usar la red actual</Button>
+          </div>
         </Fila>
       </Card>
 
