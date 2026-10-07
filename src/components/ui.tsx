@@ -18,10 +18,11 @@ export function Button({ variant = 'secondary', className, children, ...p }: But
 
 export function Segmented<T extends string>({ value, onChange, options, className }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; className?: string }) {
   return (
-    <div className={cx('flex h-9 gap-0.5 rounded-lg bg-sunken p-[3px]', className)}>
+    // max-w-full + scroll: en el móvil las opciones que no caben se desplazan en vez de quedar cortadas.
+    <div className={cx('flex h-9 max-w-full gap-0.5 overflow-x-auto rounded-lg bg-sunken p-[3px] [scrollbar-width:none]', className)}>
       {options.map(o => (
         <button key={o.value} onClick={() => onChange(o.value)}
-          className={cx('rounded-md px-3 text-[13px] transition-all', o.value === value ? 'bg-surface font-medium shadow-sm' : 'text-muted hover:text-text')}>{o.label}</button>
+          className={cx('flex-none whitespace-nowrap rounded-md px-3 text-[13px] transition-all', o.value === value ? 'bg-surface font-medium shadow-sm' : 'text-muted hover:text-text')}>{o.label}</button>
       ))}
     </div>
   );

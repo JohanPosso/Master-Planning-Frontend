@@ -1,4 +1,6 @@
-import { NavLink } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'motion/react';
 import { CalendarDays, Clock, Euro, Home, LogOut, Moon, MoreHorizontal, SlidersHorizontal, Sun, Users } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useStore } from '../store';
@@ -48,16 +50,65 @@ export function Sidebar() {
   );
 }
 
+/** Lo que no cabe en la barra inferior del móvil: va dentro de «Más». */
+const NAV_MAS = NAV.slice(4);
+
 export function MobileNav() {
-  const items = [...NAV.slice(0, 4), { to: '/equipo', label: 'Más', corto: 'Más', icon: MoreHorizontal }];
+  const { tema, setTema } = useStore();
+  const { logout } = useAuth();
+  const { pathname } = useLocation();
+  const [abierto, setAbierto] = useState(false);
+  // Ignora los toques justo al abrir: un doble toque o el «toque fantasma» del móvil caería sobre el panel.
+  const abiertoEn = useRef(0);
+  const reciénAbierto = () => Date.now() - abiertoEn.current < 400;
+  const enMas = NAV_MAS.some(n => pathname.startsWith(n.to));
+
+  useEffect(() => { setAbierto(false); }, [pathname]);
+  useEffect(() => {
+    if (!abierto) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierto(false); };
+    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
+  }, [abierto]);
+
+  const item = 'flex min-h-11 flex-1 flex-col items-center gap-0.5 text-[10px] no-underline';
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-border bg-surface px-1.5 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 md:hidden">
-      {items.map(n => (
-        <NavLink key={n.corto} to={n.to} end={n.to === '/'}
-          className={({ isActive }) => cx('flex min-h-11 flex-1 flex-col items-center gap-0.5 text-[10px] no-underline', isActive ? 'font-semibold text-text' : 'font-medium text-muted')}>
-          <n.icon size={22} strokeWidth={1.9} />{n.corto}
-        </NavLink>
-      ))}
-    </nav>
+    <>
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-border bg-surface px-1.5 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 md:hidden">
+        {NAV.slice(0, 4).map(n => (
+          <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => cx(item, isActive ? 'font-semibold text-text' : 'font-medium text-muted')}>
+            <n.icon size={22} strokeWidth={1.9} />{n.corto}
+          </NavLink>
+        ))}
+        <button onClick={() => { if (!abierto) abiertoEn.current = Date.now(); setAbierto(v => !v); }} aria-expanded={abierto} aria-haspopup="dialog" className={cx(item, enMas || abierto ? 'font-semibold text-text' : 'font-medium text-muted')}>
+          <MoreHorizontal size={22} strokeWidth={1.9} />Más
+        </button>
+      </nav>
+
+      <AnimatePresence>
+        {abierto && (
+          <motion.div className="fixed inset-0 z-50 md:hidden" style={{ background: 'var(--scrim)' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => { if (!reciénAbierto()) setAbierto(false); }}
+            onClickCapture={e => { if (reciénAbierto()) { e.preventDefault(); e.stopPropagation(); } }}>
+            <motion.div role="dialog" aria-label="Más opciones" onClick={e => e.stopPropagation()}
+              className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-surface px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-2 shadow-modal"
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 500, damping: 40 }}>
+              <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border-strong" />
+              <button onClick={logout} className="flex h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-medium text-error-fg hover:bg-error-bg">
+                <LogOut size={20} />Cerrar sesión
+              </button>
+              <button onClick={() => setTema(tema === 'claro' ? 'oscuro' : 'claro')} className="flex h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-medium hover:bg-hover">
+                {tema === 'claro' ? <Moon size={20} /> : <Sun size={20} />}{tema === 'claro' ? 'Tema oscuro' : 'Tema claro'}
+              </button>
+              <div className="my-2 border-t border-border" />
+              {NAV_MAS.map(n => (
+                <NavLink key={n.to} to={n.to} className={({ isActive }) => cx('flex h-12 items-center gap-3 rounded-xl px-3 text-[15px] no-underline', isActive ? 'bg-sunken font-semibold' : 'font-medium hover:bg-hover')}>
+                  <n.icon size={20} strokeWidth={1.9} />{n.label}
+                </NavLink>
+              ))}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
