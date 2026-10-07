@@ -101,6 +101,8 @@ export interface ResumenFichaje {
   red: { activa: boolean };
   /** Conectada al Wi-Fi de la cafetería: no hace falta pedir la ubicación. */
   enRedCafeteria: boolean;
+  /** Red que ve el servidor (solo con el Wi-Fi activo): para diagnosticar por qué no la reconoce. */
+  redDetectada: string | null;
   cierreAutomaticoHoras: number;
 }
 
@@ -153,7 +155,7 @@ export const api = {
 
   fichajesNovedades: (desde: string) => pedir<{ desde: string; fichajes: Fichaje[]; registros: Registro[] }>('GET', `/fichajes/novedades?desde=${desde}`),
   setFichajeConfig: (c: FichajeConfig) => pedir<FichajeConfig>('PUT', '/fichaje/config', c),
-  miIp: () => pedir<{ ip: string }>('GET', '/fichaje/mi-ip'),
+  miIp: () => pedir<{ ip: string; red: string }>('GET', '/fichaje/mi-ip'),
   anadirFichaje: (d: { empleadaId: string; fecha: string; tipo: Fichaje['tipo']; minuto: number; motivo: string }) => pedir<DiaFichajes>('POST', '/fichajes', d),
   corregirFichaje: (id: string, d: { tipo: Fichaje['tipo']; minuto: number; motivo: string }) => pedir<DiaFichajes>('PUT', `/fichajes/${id}`, d),
   anularFichaje: (id: string, motivo: string) => pedir<DiaFichajes>('POST', `/fichajes/${id}/anular`, { motivo }),

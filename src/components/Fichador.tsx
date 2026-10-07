@@ -144,6 +144,11 @@ export function Fichador() {
           ) : resumen.red.activa ? (
             <span className="flex items-center gap-1.5 text-[12px] text-muted"><Wifi size={13} />Conéctate al Wi-Fi de la cafetería para fichar</span>
           ) : null}
+          {resumen.red.activa && !resumen.enRedCafeteria && resumen.redDetectada && (
+            <span className="text-[11px] leading-relaxed text-muted">
+              Tu conexión: <span className="num font-medium text-text">{resumen.redDetectada}</span>. No coincide con el Wi-Fi de la cafetería; si estás conectada a él, díselo al encargado.
+            </span>
+          )}
           {dentro && <span className="text-[11px] text-muted">Si olvidas fichar la salida, se cerrará sola a las {resumen.cierreAutomaticoHoras} h.</span>}
         </Card>
 

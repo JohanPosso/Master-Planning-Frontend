@@ -94,9 +94,12 @@ function AjustesFichaje() {
   const usarRedActual = async () => {
     setLeyendoRed(true);
     try {
-      const { ip } = await api.miIp();
+      const { ip, red } = await api.miIp();
       if (c.red.ips.includes(ip)) toast('Esta red ya está guardada');
-      else guardar({ red: { ...c.red, ips: [...c.red.ips, ip] } });
+      else {
+        guardar({ red: { ...c.red, ips: [...c.red.ips, ip] } });
+        if (red !== ip) toast('Red IPv6 guardada', { description: `Se reconocerá cualquier dispositivo de ${red}.` });
+      }
     } catch (e) { toast.error(mensajeError(e)); } finally { setLeyendoRed(false); }
   };
   const quitarRed = (ip: string) => {
@@ -142,7 +145,7 @@ function AjustesFichaje() {
         <Fila titulo="Redes guardadas" desc={c.red.ips.length ? (
           <span className="flex flex-wrap gap-1.5 pt-1">{c.red.ips.map(ip => (
             <span key={ip} className="num inline-flex items-center gap-1 rounded-md border border-border bg-sunken px-2 py-0.5 text-[12px] text-text">
-              {ip}<button onClick={() => quitarRed(ip)} className="text-muted hover:text-error-fg" aria-label={`Quitar ${ip}`}><Trash2 size={12} /></button>
+              <span title={ip.includes(':') ? 'IPv6: vale para todo el prefijo /64 (todos los móviles de ese Wi-Fi)' : undefined}>{ip}</span><button onClick={() => quitarRed(ip)} className="text-muted hover:text-error-fg" aria-label={`Quitar ${ip}`}><Trash2 size={12} /></button>
             </span>
           ))}</span>
         ) : 'Ninguna'} ultima>
