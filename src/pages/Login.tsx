@@ -4,7 +4,7 @@ import { useAuth, mensajeError } from '../lib/auth';
 import { Button, inputCls } from '../components/ui';
 
 export default function Login() {
-  const { sesion, login } = useAuth();
+  const { sesion, login, motivoCierre } = useAuth();
   const navigate = useNavigate();
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
@@ -43,6 +43,11 @@ export default function Login() {
           <span className="text-xs font-semibold">Contraseña / PIN</span>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" className={inputCls} />
         </label>
+        {!error && motivoCierre && (
+          <p role="status" className="mb-3 rounded-lg bg-warn-bg px-3 py-2 text-[13px] text-warn-fg">
+            {motivoCierre === 'caducada' ? 'Tu sesión se cerró automáticamente por seguridad. Vuelve a entrar.' : 'Tu sesión ya no es válida. Vuelve a entrar.'}
+          </p>
+        )}
         {error && <p className="mb-3 rounded-lg bg-error-bg px-3 py-2 text-[13px] text-error-fg">{error}</p>}
         <Button type="submit" variant="primary" disabled={enviando || !usuario.trim() || !password} className="w-full">
           {enviando ? 'Entrando…' : 'Entrar'}

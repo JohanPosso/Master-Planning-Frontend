@@ -22,7 +22,7 @@ npm test   # Vitest
 
 ## Qué funciona
 
-- **Login**: encargado (`admin`) o empleada (usuario + PIN asignado en Equipo).
+- **Login**: encargado (`admin`) o empleada (usuario + PIN asignado en Equipo). La sesión se cierra sola 1 hora después de entrar (aviso 5 minutos antes); la pantalla de entrada explica el motivo.
 - **Portal empleada** (`/portal`): **fichaje** (reloj con la hora del servidor, botón de entrada/salida, horas de hoy y de la semana, historial de 14 días), horario publicado y estimación/histórico de pago.
 - **Fichaje para el encargado**: estado en vivo en Inicio (dentro / salió / cierre automático / sin fichar). En Registro de horas, los fichajes del día con avisos («Falta salida», «Revisar») y un editor para añadir, corregir o anular con motivo, que conserva el historial. En Ajustes → Fichaje: GPS, Wi-Fi de la cafetería, qué hacer si no se puede verificar y horas del cierre automático. Se refresca solo cada 30 s, sin pisar lo que se está editando.
 - **Horario · Semana**: cuadrícula, drag & drop de turnos, plantillas, avisos, publicar/borrador, CSV/PDF.

@@ -9,6 +9,12 @@ export const setAuthToken = (token: string | null) => {
   authToken = token;
 };
 
+/** Se avisa a la sesión cuando el servidor rechaza el token (caducado o no válido) para cerrarla. */
+let alNoAutorizado: ((codigo: string) => void) | null = null;
+export const setAlNoAutorizado = (fn: ((codigo: string) => void) | null) => {
+  alNoAutorizado = fn;
+};
+
 export class ApiError extends Error {
   constructor(public status: number, message: string, public detalles?: unknown) {
     super(message);
@@ -35,6 +41,8 @@ async function pedir<T>(metodo: string, ruta: string, cuerpo?: unknown): Promise
   if (!res.ok) {
     const porDefecto = res.status >= 500 ? 'El servidor no responde. Inténtalo de nuevo en unos segundos.' : `Error ${res.status}`;
     const { message = porDefecto, details } = datos?.error ?? {};
+    // Credenciales incorrectas en el login también dan 401: eso no es «sesión caducada».
+    if (res.status === 401 && authToken && ruta !== '/auth/login') alNoAutorizado?.(datos?.error?.code ?? 'UNAUTHORIZED');
     const campo = Array.isArray(details) && details[0] ? ` · ${details[0].path}: ${details[0].message}` : '';
     throw new ApiError(res.status, message + campo, details);
   }
@@ -47,6 +55,8 @@ export interface LoginRes {
   token: string;
   rol: Rol;
   perfil: Perfil;
+  /** Instante en que caduca la sesión (ISO). */
+  expiraEn: string;
 }
 
 export interface PortalEstado {
@@ -103,7 +113,7 @@ export type EmpleadaWrite = Empleada & { password?: string; quitarAcceso?: boole
 
 export const api = {
   login: (usuario: string, password: string) => pedir<LoginRes>('POST', '/auth/login', { usuario, password }),
-  me: () => pedir<{ rol: Rol; perfil: Perfil }>('GET', '/auth/me'),
+  me: () => pedir<{ rol: Rol; perfil: Perfil; expiraEn: string }>('GET', '/auth/me'),
   logout: () => pedir<void>('POST', '/auth/logout'),
 
   portalEstado: () => pedir<PortalEstado>('GET', '/portal/estado'),
