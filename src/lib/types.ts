@@ -13,9 +13,21 @@ export interface Turno { id: string; empleadaId: string; fecha: string; tramos: 
 export interface Registro { id: string; empleadaId: string; fecha: string; tramos: Tramo[]; nota?: string; estado: 'previsto' | 'confirmado'; origen?: 'fichaje' }
 
 /** Marca de entrada/salida (solo lectura): `minuto` en hora local del negocio, `marca` el instante exacto. */
-export interface Fichaje { id: string; empleadaId: string; fecha: string; minuto: number; tipo: 'entrada' | 'salida'; marca: string; distanciaM?: number }
+export interface Fichaje {
+  id: string; empleadaId: string; fecha: string; minuto: number; tipo: 'entrada' | 'salida'; marca: string; distanciaM?: number;
+  /** Sin valor: lo fichó la empleada. */
+  origen?: 'encargado' | 'automatico';
+  verificacion?: 'gps' | 'red' | 'sin_verificar';
+  /** Instante en que se anuló (corrección del encargado); queda en el historial. */
+  anulado?: string; motivo?: string; sustituyeA?: string;
+}
 export interface Geocerca { activa: boolean; latitud: number | null; longitud: number | null; radioM: number }
-export interface FichajeConfig { geocerca: Geocerca }
+export interface FichajeConfig {
+  geocerca: Geocerca;
+  red: { activa: boolean; ips: string[] };
+  sinVerificar: 'revisar' | 'bloquear';
+  cierreAutomaticoHoras: number;
+}
 export interface LineaPago { empleadaId: string; minutos: number; importeCent: number; tarifaCent?: number; recargosCent?: number }
 export interface PeriodoPago { id: string; inicio: string; fin: string; etiqueta: string; pagadoEn: string; totalCent: number; lineas: LineaPago[] }
 export interface Semana { lunes: string; publicada: boolean }

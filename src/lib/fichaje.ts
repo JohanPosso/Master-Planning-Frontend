@@ -1,10 +1,14 @@
 import type { Fichaje, Tramo } from './types';
 
-/** Igual que en el servidor: empareja entradas y salidas; una entrada sin salida queda abierta. */
+export const vigentes = (fichajes: Fichaje[]) => fichajes.filter(f => !f.anulado);
+/** Orden del día como en el servidor: por minuto y, a igualdad, por instante. */
+export const ordenarDia = (fichajes: Fichaje[]) => [...fichajes].sort((a, b) => a.minuto - b.minuto || a.marca.localeCompare(b.marca));
+
+/** Igual que en el servidor: empareja entradas y salidas vigentes; una entrada sin salida queda abierta. */
 export function estadoDia(fichajes: Fichaje[]) {
   const pares: Tramo[] = [];
   let abierta: number | null = null;
-  for (const f of [...fichajes].sort((a, b) => a.marca.localeCompare(b.marca))) {
+  for (const f of ordenarDia(vigentes(fichajes))) {
     if (f.tipo === 'entrada') abierta ??= f.minuto;
     else if (abierta !== null) {
       if (f.minuto > abierta) pares.push({ inicio: abierta, fin: f.minuto });

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ExternalLink, Loader2, MapPin, Plus, Trash2 } from 'lucide-react';
+import { ExternalLink, Loader2, MapPin, Plus, Trash2, Wifi } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Geocerca, Plantilla, Reglas } from '../lib/types';
+import type { FichajeConfig, Geocerca, Plantilla, Reglas } from '../lib/types';
+import { api, mensajeError } from '../lib/api';
 import { desdeIso, dur, fmt, hhmm, minutos, toMin, uid } from '../lib/time';
 import { tramosValidos, useStore } from '../store';
 import { Button, Card, PageHeader, Segmented, Toggle, cx, inputCls } from '../components/ui';
@@ -57,43 +58,62 @@ function Hora({ value, onChange }: { value: number; onChange: (n: number) => voi
   return <input type="time" value={hhmm(value)} onChange={e => e.target.value && onChange(toMin(e.target.value))} className={cx(inputCls, 'h-8 w-[96px] text-[13px]')} />;
 }
 
-/** Geocerca opcional: solo se puede fichar a menos de `radioM` metros de la cafetería. */
+/** Fila de ajuste. Fuera del componente: si se definiera dentro, cada render desmontaría sus campos. */
+function Fila({ titulo, desc, children, ultima }: { titulo: string; desc: ReactNode; children?: ReactNode; ultima?: boolean }) {
+  return (
+    <div className={cx('flex flex-wrap items-center gap-3 px-4 py-3', !ultima && 'border-b border-border')}>
+      <div className="flex min-w-[200px] flex-1 flex-col gap-0.5"><span className="text-sm font-medium">{titulo}</span><span className="text-xs leading-relaxed text-muted">{desc}</span></div>
+      {children}
+    </div>
+  );
+}
+
+/** Fichaje: dónde se puede fichar (GPS y/o Wi-Fi), qué pasa si no se puede comprobar y el cierre automático. */
 function AjustesFichaje() {
   const { state, acciones } = useStore();
-  const g = state.fichaje.geocerca;
+  const c = state.fichaje;
+  const g = c.geocerca;
   const [localizando, setLocalizando] = useState(false);
-  const guardar = (cambios: Partial<Geocerca>) => void acciones.setFichajeConfig({ geocerca: { ...g, ...cambios } });
+  const [leyendoRed, setLeyendoRed] = useState(false);
+  const guardar = (cambios: Partial<FichajeConfig>) => void acciones.setFichajeConfig({ ...c, ...cambios });
+  const guardarGeocerca = (cambios: Partial<Geocerca>) => guardar({ geocerca: { ...g, ...cambios } });
   const fijada = g.latitud !== null && g.longitud !== null;
+  const verificacionActiva = g.activa || c.red.activa;
 
   const usarMiUbicacion = () => {
     if (!('geolocation' in navigator)) return toast.error('Este navegador no permite obtener la ubicación');
     setLocalizando(true);
     navigator.geolocation.getCurrentPosition(
-      p => { setLocalizando(false); guardar({ latitud: +p.coords.latitude.toFixed(6), longitud: +p.coords.longitude.toFixed(6) }); },
+      p => { setLocalizando(false); guardarGeocerca({ latitud: +p.coords.latitude.toFixed(6), longitud: +p.coords.longitude.toFixed(6) }); },
       e => { setLocalizando(false); toast.error(e.code === e.PERMISSION_DENIED ? 'Permite el acceso a la ubicación para fijar la cafetería' : 'No se pudo obtener la ubicación'); },
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 }
     );
+  };
+
+  const usarRedActual = async () => {
+    setLeyendoRed(true);
+    try {
+      const { ip } = await api.miIp();
+      if (c.red.ips.includes(ip)) toast('Esta red ya está guardada');
+      else guardar({ red: { ...c.red, ips: [...c.red.ips, ip] } });
+    } catch (e) { toast.error(mensajeError(e)); } finally { setLeyendoRed(false); }
+  };
+  const quitarRed = (ip: string) => {
+    const ips = c.red.ips.filter(x => x !== ip);
+    guardar({ red: { activa: c.red.activa && ips.length > 0, ips } });
   };
 
   return (
     <>
       <Card className="flex flex-col">
         <div className="flex flex-col gap-0.5 border-b border-border px-4 py-4">
-          <span className="text-[15px] font-semibold">Fichaje de las empleadas</span>
-          <span className="text-xs leading-relaxed text-muted">Cada empleada ficha la entrada y la salida desde su portal. La hora la pone el servidor, no el móvil. Al fichar la salida, sus horas aparecen en «Registro de horas» como «por confirmar»; si las corriges, se respeta tu cambio.</span>
+          <span className="text-[15px] font-semibold">Dónde se puede fichar</span>
+          <span className="text-xs leading-relaxed text-muted">Primero se mira si está conectada al Wi-Fi de la cafetería (sin pedir la ubicación); si no, el GPS del móvil. Si el GPS dice claramente que está lejos, no deja fichar.</span>
         </div>
-        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-sm font-medium">Solo desde la cafetería</span>
-            <span className="text-xs text-muted">{fijada ? 'Pide la ubicación al fichar y la rechaza fuera del radio. Solo se guarda la distancia como prueba.' : 'Primero fija la ubicación de la cafetería.'}</span>
-          </div>
-          <div className={cx(!fijada && 'pointer-events-none opacity-45')}><Toggle on={g.activa} onChange={v => guardar({ activa: v })} label="Solo desde la cafetería" /></div>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
-          <div className="flex min-w-[180px] flex-1 flex-col gap-0.5">
-            <span className="text-sm font-medium">Ubicación de la cafetería</span>
-            <span className="num text-xs text-muted">{fijada ? `${g.latitud!.toFixed(5)}, ${g.longitud!.toFixed(5)}` : 'Sin fijar'}</span>
-          </div>
+        <Fila titulo="Por ubicación (GPS)" desc={fijada ? 'Rechaza fuera del radio. Solo se guarda la distancia como prueba.' : 'Primero fija la ubicación de la cafetería.'}>
+          <div className={cx(!fijada && 'pointer-events-none opacity-45')}><Toggle on={g.activa} onChange={v => guardarGeocerca({ activa: v })} label="Fichar por ubicación" /></div>
+        </Fila>
+        <Fila titulo="Ubicación de la cafetería" desc={<span className="num">{fijada ? `${g.latitud!.toFixed(5)}, ${g.longitud!.toFixed(5)}` : 'Sin fijar'}</span>}>
           {fijada && (
             <a href={`https://www.openstreetmap.org/?mlat=${g.latitud}&mlon=${g.longitud}#map=18/${g.latitud}/${g.longitud}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-medium text-muted hover:text-text">
               Ver en el mapa<ExternalLink size={12} />
@@ -102,15 +122,36 @@ function AjustesFichaje() {
           <Button onClick={usarMiUbicacion} disabled={localizando}>
             {localizando ? <Loader2 size={15} className="animate-spin" /> : <MapPin size={15} />}{fijada ? 'Actualizar con mi ubicación' : 'Usar mi ubicación actual'}
           </Button>
-        </div>
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <div className="flex flex-col gap-0.5"><span className="text-sm font-medium">Radio permitido</span><span className="text-xs text-muted">Entre 25 m y 5 km. Se tolera la imprecisión del GPS (hasta 100 m).</span></div>
-          <Num value={g.radioM} onChange={v => guardar({ radioM: v })} suf="m" min={25} max={5000} />
-        </div>
+        </Fila>
+        <Fila titulo="Radio permitido" desc="Entre 25 m y 5 km. Se tolera la imprecisión del GPS (hasta 100 m).">
+          <Num value={g.radioM} onChange={v => guardarGeocerca({ radioM: v })} suf="m" min={25} max={5000} />
+        </Fila>
+        <Fila titulo="Por Wi-Fi de la cafetería" desc={c.red.ips.length ? 'Quien ficha conectada a esta red no necesita dar la ubicación. Funciona con la IP pública del router: si tu proveedor la cambia, vuelve a pulsar «Usar la red actual».' : 'Pulsa «Usar la red actual» estando conectado al Wi-Fi de la cafetería.'}>
+          <div className={cx(!c.red.ips.length && 'pointer-events-none opacity-45')}><Toggle on={c.red.activa} onChange={v => guardar({ red: { ...c.red, activa: v } })} label="Fichar por Wi-Fi" /></div>
+        </Fila>
+        <Fila titulo="Redes guardadas" desc={c.red.ips.length ? (
+          <span className="flex flex-wrap gap-1.5 pt-1">{c.red.ips.map(ip => (
+            <span key={ip} className="num inline-flex items-center gap-1 rounded-md border border-border bg-sunken px-2 py-0.5 text-[12px] text-text">
+              {ip}<button onClick={() => quitarRed(ip)} className="text-muted hover:text-error-fg" aria-label={`Quitar ${ip}`}><Trash2 size={12} /></button>
+            </span>
+          ))}</span>
+        ) : 'Ninguna'} ultima>
+          <Button onClick={() => void usarRedActual()} disabled={leyendoRed}>{leyendoRed ? <Loader2 size={15} className="animate-spin" /> : <Wifi size={15} />}Usar la red actual</Button>
+        </Fila>
       </Card>
+
+      <Card className="flex flex-col">
+        <Fila titulo="Si no se puede comprobar" desc={verificacionActiva ? 'Sin GPS (permiso denegado o sin señal) y fuera del Wi-Fi.' : 'Solo aplica si activas el GPS o el Wi-Fi.'}>
+          <Segmented value={c.sinVerificar} onChange={v => guardar({ sinVerificar: v })} options={[{ value: 'revisar', label: 'Dejar fichar y marcar' }, { value: 'bloquear', label: 'No dejar fichar' }]} />
+        </Fila>
+        <Fila titulo="Cierre automático" desc="Si alguien olvida fichar la salida, se cierra sola pasadas estas horas: al fin de su turno o, sin turno, a la hora de entrada + estas horas. El día queda «por confirmar» con una nota." ultima>
+          <Num value={c.cierreAutomaticoHoras} onChange={v => guardar({ cierreAutomaticoHoras: v })} suf="h" min={4} max={16} w={44} />
+        </Fila>
+      </Card>
+
       <Card className="flex flex-col gap-2 p-4 text-xs leading-relaxed text-muted">
         <span className="text-sm font-semibold text-text">Registro de jornada</span>
-        <span>Los fichajes no se pueden editar ni borrar: las correcciones se hacen en «Registro de horas», que conserva el fichaje original al lado. Cada empleada puede consultar sus fichajes desde su portal.</span>
+        <span>Los fichajes no se borran. Puedes añadir, corregir o anular uno desde «Registro de horas» (pulsando sobre los fichajes del día) indicando el motivo: el original queda en el historial y la empleada ve que se corrigió.</span>
       </Card>
     </>
   );

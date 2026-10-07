@@ -10,6 +10,11 @@ describe('estadoDia', () => {
   it('empareja turno partido y detecta la entrada abierta', () => {
     expect(estadoDia([F('entrada', 540), F('salida', 720), F('entrada', 1080)])).toEqual({ pares: [{ inicio: 540, fin: 720 }], abierta: 1080, dentro: true, minutos: 180 });
   });
+  it('ordena por minuto e ignora los anulados (como el servidor)', () => {
+    const salida = F('salida', 720);
+    const entradaAñadida = F('entrada', 480);
+    expect(estadoDia([salida, { ...F('salida', 600), anulado: '2026-10-07T10:00:00Z' }, entradaAñadida]).pares).toEqual([{ inicio: 480, fin: 720 }]);
+  });
   it('ignora salidas huérfanas y pares de 0 minutos', () => {
     expect(estadoDia([F('salida', 400), F('entrada', 480), F('salida', 480)]).pares).toEqual([]);
   });

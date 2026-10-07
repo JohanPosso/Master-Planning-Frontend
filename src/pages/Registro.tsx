@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { addDays, addMonths, eachDayOfInterval, endOfMonth, startOfMonth } from 'date-fns';
 import { ChevronLeft, ChevronRight, Check, Fingerprint } from 'lucide-react';
 import type { Empleada, Fichaje, Registro as Reg, Turno } from '../lib/types';
-import { estadoDia } from '../lib/fichaje';
+import { estadoDia, ordenarDia, vigentes } from '../lib/fichaje';
+import { FichajesDia } from '../components/FichajesDia';
 import { colorVars } from '../lib/theme';
 import { activas, jornada } from '../lib/rules';
 import { capital, diasSemana, diff, dur, fmt, hhmm, iso, lunesDe, minutos, rangoSemana, rangoTramos, toMin } from '../lib/time';
@@ -11,19 +12,28 @@ import { Badge, Button, Card, PageHeader, Segmented, cx } from '../components/ui
 
 type Vista = 'dia' | 'semana' | 'mes';
 
-/** Lo que fichó la empleada ese día, en una línea; avisa si quedó una entrada sin salida en un día pasado. */
-function LineaFichajes({ fichajes, registro, pasado }: { fichajes: Fichaje[]; registro?: Reg; pasado: boolean }) {
-  if (!fichajes.length) return null;
-  // Solo avisa mientras nadie lo haya resuelto: si ya hay registro de horas, el encargado lo completó.
+/**
+ * Lo que fichó la empleada ese día, en una línea. Pulsando se abre el editor de fichajes del encargado.
+ * Avisa si quedó una entrada sin salida en un día pasado (mientras nadie lo resuelva) o si algo está por revisar.
+ */
+function LineaFichajes({ fichajes, registro, pasado, futuro, onAbrir }: { fichajes: Fichaje[]; registro?: Reg; pasado: boolean; futuro: boolean; onAbrir: () => void }) {
+  const activos = ordenarDia(vigentes(fichajes));
+  if (!activos.length) {
+    if (futuro) return null;
+    return <button onClick={onAbrir} className="w-fit text-[11px] text-muted transition-opacity hover:text-text focus:opacity-100 md:opacity-0 md:group-hover:opacity-100">+ Añadir fichaje</button>;
+  }
   const incompleto = pasado && !registro && estadoDia(fichajes).dentro;
+  const revisar = activos.some(f => f.origen === 'automatico' || f.verificacion === 'sin_verificar');
   return (
-    <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted" title={registro?.origen === 'fichaje' ? 'Horas tomadas de los fichajes' : 'Horas ajustadas a mano'}>
+    <button onClick={onAbrir} className="flex w-fit flex-wrap items-center gap-1.5 rounded text-left text-[11px] text-muted hover:text-text" title="Ver o corregir los fichajes">
       <Fingerprint size={12} className={registro?.origen === 'fichaje' ? 'text-ok-fg' : ''} />
-      <span className="num">{fichajes.map(f => `${f.tipo === 'entrada' ? '↘' : '↗'} ${hhmm(f.minuto)}`).join('  ')}</span>
+      <span className="num">{activos.map(f => `${f.tipo === 'entrada' ? '↘' : '↗'} ${hhmm(f.minuto)}${f.origen ? '*' : ''}`).join('  ')}</span>
       {incompleto && <Badge tone="warn">Falta salida</Badge>}
-    </span>
+      {!incompleto && revisar && registro?.estado !== 'confirmado' && <Badge tone="warn">Revisar</Badge>}
+    </button>
   );
 }
+
 const COLS = '150px 170px 190px 84px 76px minmax(120px,1fr) 150px';
 
 function useFilaRegistro(e: Empleada, fecha: string, turno: Turno | undefined, registro: Reg | undefined, hoy: string) {
@@ -54,18 +64,20 @@ function useFilaRegistro(e: Empleada, fecha: string, turno: Turno | undefined, r
   const inp = (difiere: boolean) => cx('num h-[30px] w-[78px] rounded-md border px-1.5 text-center text-[13px] font-semibold outline-none focus:border-primary focus:shadow-[0_0_0_3px_var(--primary-tint)]',
     difiere ? 'border-warn-line bg-warn-bg text-warn-fg' : futuro && !registro ? 'border-border bg-transparent font-normal text-muted' : 'border-border bg-bg');
 
-  return { vals, setVals, nota, setNota, ok, plan, real, df, futuro, estado, guardar, blur, tecla, inp, turno, fichajes };
+  const [editarFichajes, setEditarFichajes] = useState(false);
+  return { vals, setVals, nota, setNota, ok, plan, real, df, futuro, estado, guardar, blur, tecla, inp, turno, fichajes, editarFichajes, setEditarFichajes };
 }
 
 function FilaDesktop({ e, fecha, turno, registro, hoy }: { e: Empleada; fecha: string; turno?: Turno; registro?: Reg; hoy: string }) {
-  const { vals, setVals, nota, setNota, real, df, futuro, estado, guardar, blur, tecla, inp, turno: t, fichajes } = useFilaRegistro(e, fecha, turno, registro, hoy);
+  const { vals, setVals, nota, setNota, real, df, futuro, estado, guardar, blur, tecla, inp, turno: t, fichajes, editarFichajes, setEditarFichajes } = useFilaRegistro(e, fecha, turno, registro, hoy);
 
   return (
-    <div style={{ ...colorVars(e.color), gridTemplateColumns: COLS }} className={cx('grid items-center gap-2 border-b border-border px-4 py-2.5', futuro && !registro && 'opacity-70')}
+    <>
+    <div style={{ ...colorVars(e.color), gridTemplateColumns: COLS }} className={cx('group grid items-center gap-2 border-b border-border px-4 py-2.5', futuro && !registro && 'opacity-70')}
       onKeyDown={tecla}>
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-c-solid" /><span className="text-[13px] font-semibold">{e.nombre}</span></div>
-        <LineaFichajes fichajes={fichajes} registro={registro} pasado={fecha < hoy} />
+        <LineaFichajes fichajes={fichajes} registro={registro} pasado={fecha < hoy} futuro={futuro} onAbrir={() => setEditarFichajes(true)} />
       </div>
       <span className="num text-[13px] text-muted">{t ? rangoTramos(t.tramos) : 'Extra'}</span>
       <div className="flex flex-col gap-1">
@@ -85,14 +97,18 @@ function FilaDesktop({ e, fecha, turno, registro, hoy }: { e: Empleada; fecha: s
         {estado !== 'Confirmado' && !futuro && <button onClick={() => guardar('confirmado')} className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-hover hover:text-ok-fg" aria-label="Confirmar"><Check size={15} /></button>}
       </div>
     </div>
+      {/* Fuera de la fila: la fila confirma con Enter y no debe recibir las teclas del editor. */}
+      <FichajesDia empleada={e} fecha={fecha} open={editarFichajes} onClose={() => setEditarFichajes(false)} />
+    </>
   );
 }
 
 function FilaMobile({ e, fecha, turno, registro, hoy }: { e: Empleada; fecha: string; turno?: Turno; registro?: Reg; hoy: string }) {
-  const { vals, setVals, nota, setNota, real, df, futuro, estado, guardar, blur, tecla, inp, turno: t, fichajes } = useFilaRegistro(e, fecha, turno, registro, hoy);
+  const { vals, setVals, nota, setNota, real, df, futuro, estado, guardar, blur, tecla, inp, turno: t, fichajes, editarFichajes, setEditarFichajes } = useFilaRegistro(e, fecha, turno, registro, hoy);
 
   return (
-    <div style={colorVars(e.color)} className={cx('rounded-xl border border-border bg-surface p-3.5', futuro && !registro && 'opacity-70')} onKeyDown={tecla}>
+    <>
+    <div style={colorVars(e.color)} className={cx('group rounded-xl border border-border bg-surface p-3.5', futuro && !registro && 'opacity-70')} onKeyDown={tecla}>
       <div className="mb-2.5 flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="h-2 w-2 flex-none rounded-full bg-c-solid" />
@@ -102,7 +118,7 @@ function FilaMobile({ e, fecha, turno, registro, hoy }: { e: Empleada; fecha: st
       </div>
       <div className="mb-3 text-[13px] text-muted">
         Planificado: <span className="num font-medium text-text">{t ? rangoTramos(t.tramos) : 'Extra'}</span>
-        <div className="mt-1"><LineaFichajes fichajes={fichajes} registro={registro} pasado={fecha < hoy} /></div>
+        <div className="mt-1"><LineaFichajes fichajes={fichajes} registro={registro} pasado={fecha < hoy} futuro={futuro} onAbrir={() => setEditarFichajes(true)} /></div>
       </div>
       <div className="mb-3 flex flex-col gap-2">
         <span className="text-[11px] font-medium uppercase tracking-[.06em] text-muted">Horas reales</span>
@@ -131,6 +147,9 @@ function FilaMobile({ e, fecha, turno, registro, hoy }: { e: Empleada; fecha: st
         </Button>
       )}
     </div>
+      {/* Fuera de la fila: la fila confirma con Enter y no debe recibir las teclas del editor. */}
+      <FichajesDia empleada={e} fecha={fecha} open={editarFichajes} onClose={() => setEditarFichajes(false)} />
+    </>
   );
 }
 

@@ -62,7 +62,11 @@ export function fusionarNovedades(s: State, n: Novedades, { historial = false } 
   }
   const clave = (r: Registro) => `${r.empleadaId}|${r.fecha}`;
   const deFichaje = new Map(n.registros.filter(r => r.origen === 'fichaje').map(r => [clave(r), r]));
-  const registros = s.registros.map(r => (r.origen === 'fichaje' && deFichaje.get(clave(r))) || r);
+  const enServidor = new Set(n.registros.map(clave));
+  const registros = s.registros
+    // Las horas de fichaje son del servidor: si ya no existen (una corrección las quitó), tampoco en la instantánea.
+    .filter(r => !(r.origen === 'fichaje' && r.fecha >= n.desde && !enServidor.has(clave(r))))
+    .map(r => (r.origen === 'fichaje' && deFichaje.get(clave(r))) || r);
   const presentes = new Set(registros.map(clave));
   return { ...s, fichajes, registros: [...registros, ...[...deFichaje.values()].filter(r => !presentes.has(clave(r)))] };
 }
@@ -75,4 +79,17 @@ function conservar<T>(antes: T[], despues: T[], clave: (x: T) => string): T[] {
   const previos = new Map(antes.map(x => [clave(x), x]));
   const res = despues.map(x => { const p = previos.get(clave(x)); return p && igual(p, x) ? p : x; });
   return res.length === antes.length && res.every((x, i) => x === antes[i]) ? antes : res;
+}
+
+/**
+ * Aplica el resultado de una corrección del encargado (todos los fichajes del día y su registro).
+ * En las instantáneas de «deshacer» solo se tocan las horas que salen de fichajes, como en fusionarNovedades.
+ */
+export function aplicarDiaFichajes(s: State, dia: { empleadaId: string; fecha: string; fichajes: Fichaje[]; registro: Registro | null }, { historial = false } = {}): State {
+  const esDia = (x: { empleadaId: string; fecha: string }) => x.empleadaId === dia.empleadaId && x.fecha === dia.fecha;
+  const fichajes = [...s.fichajes.filter(f => !esDia(f)), ...dia.fichajes];
+  const previo = s.registros.find(esDia);
+  const sustituir = !historial || !previo || previo.origen === 'fichaje';
+  const registros = !sustituir ? s.registros : [...s.registros.filter(r => !esDia(r)), ...(dia.registro && (!historial || dia.registro.origen === 'fichaje') ? [dia.registro] : [])];
+  return { ...s, fichajes, registros };
 }

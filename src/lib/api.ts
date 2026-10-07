@@ -86,9 +86,16 @@ export interface ResumenFichaje {
   fichajesHoy: Fichaje[];
   turnoHoy: Turno | null;
   semana: { lunes: string; minutosFichados: number; minutosPlanificados: number };
-  historial: { fecha: string; fichajes: Fichaje[]; minutos: number; incompleto: boolean }[];
+  historial: { fecha: string; fichajes: Fichaje[]; minutos: number; incompleto: boolean; corregido: boolean }[];
   geocerca: { activa: boolean; radioM: number };
+  red: { activa: boolean };
+  /** Conectada al Wi-Fi de la cafetería: no hace falta pedir la ubicación. */
+  enRedCafeteria: boolean;
+  cierreAutomaticoHoras: number;
 }
+
+/** Resultado de una corrección: todos los fichajes del día (con anulados) y cómo queda el registro. */
+export interface DiaFichajes { fecha: string; empleadaId: string; fichajes: Fichaje[]; registro: Registro | null }
 
 export interface Ubicacion { latitud: number; longitud: number; precisionM?: number }
 
@@ -136,4 +143,8 @@ export const api = {
 
   fichajesNovedades: (desde: string) => pedir<{ desde: string; fichajes: Fichaje[]; registros: Registro[] }>('GET', `/fichajes/novedades?desde=${desde}`),
   setFichajeConfig: (c: FichajeConfig) => pedir<FichajeConfig>('PUT', '/fichaje/config', c),
+  miIp: () => pedir<{ ip: string }>('GET', '/fichaje/mi-ip'),
+  anadirFichaje: (d: { empleadaId: string; fecha: string; tipo: Fichaje['tipo']; minuto: number; motivo: string }) => pedir<DiaFichajes>('POST', '/fichajes', d),
+  corregirFichaje: (id: string, d: { tipo: Fichaje['tipo']; minuto: number; motivo: string }) => pedir<DiaFichajes>('PUT', `/fichajes/${id}`, d),
+  anularFichaje: (id: string, motivo: string) => pedir<DiaFichajes>('POST', `/fichajes/${id}/anular`, { motivo }),
 };

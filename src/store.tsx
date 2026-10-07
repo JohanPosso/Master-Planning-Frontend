@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { toast } from 'sonner';
 import type { Empleada, PeriodoPago, Plantilla, Registro, State, Tramo, Turno } from './lib/types';
 import { api, mensajeError, type EmpleadaWrite } from './lib/api';
-import { diffEstado, fusionarNovedades, sinCambios } from './lib/sync';
+import { aplicarDiaFichajes, diffEstado, fusionarNovedades, sinCambios } from './lib/sync';
 import { addDays } from 'date-fns';
 import { iso, uid } from './lib/time';
 import { aplicarTema, type Tema } from './lib/theme';
@@ -29,6 +29,10 @@ interface Api {
     setReglas: (r: Partial<State['reglas']>) => void;
     setAjustes: (a: Partial<State['ajustes']>) => void;
     setFichajeConfig: (c: State['fichaje']) => Promise<void>;
+    /** Correcciones de fichajes (sin «deshacer»: quedan en el historial con su motivo). Devuelven si se guardó. */
+    anadirFichaje: (d: { empleadaId: string; fecha: string; tipo: 'entrada' | 'salida'; minuto: number; motivo: string }) => Promise<boolean>;
+    corregirFichaje: (id: string, d: { tipo: 'entrada' | 'salida'; minuto: number; motivo: string }) => Promise<boolean>;
+    anularFichaje: (id: string, motivo: string) => Promise<boolean>;
   };
 }
 const Ctx = createContext<Api | null>(null);
@@ -176,8 +180,18 @@ function crearMotor(setState: (s: State) => void, setError: (e: string | null) =
       const fichaje = await api.setFichajeConfig(c);
       aplicarExterno(s => ({ ...s, fichaje }));
       toast('Ajustes de fichaje guardados');
-    }).catch(e => fallo(e))
+    }).catch(e => fallo(e)),
+    anadirFichaje: d => corregir(() => api.anadirFichaje(d), 'Fichaje añadido'),
+    corregirFichaje: (id, d) => corregir(() => api.corregirFichaje(id, d), 'Fichaje corregido'),
+    anularFichaje: (id, motivo) => corregir(() => api.anularFichaje(id, motivo), 'Fichaje anulado')
   };
+
+  const corregir = (remoto: () => ReturnType<typeof api.anadirFichaje>, msg: string) => encolar(async () => {
+    const dia = await remoto();
+    aplicarExterno(s => aplicarDiaFichajes(s, dia), s => aplicarDiaFichajes(s, dia, { historial: true }));
+    toast(msg);
+    return true;
+  }).catch(e => { fallo(e); return false; });
 
   /** Trae lo fichado desde ayer. En cola: nunca pisa un cambio del encargado que aún no llegó al servidor. */
   const refrescarFichajes = () => encolar(async () => {

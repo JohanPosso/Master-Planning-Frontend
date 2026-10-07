@@ -1,23 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronDown, Loader2, LogIn, LogOut, MapPin } from 'lucide-react';
+import { ChevronDown, Loader2, LogIn, LogOut, MapPin, Wifi } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, mensajeError, type ResumenFichaje, type Ubicacion } from '../lib/api';
 import { minutoEn, minutosEnVivo } from '../lib/fichaje';
 import { capital, desdeIso, dur, fmt, hhmm, rangoTramos } from '../lib/time';
 import { Badge, Card, cx } from './ui';
+import { EtiquetasFichaje } from './FichajesDia';
 
 const REFRESCO_MS = 60_000;
 
 /** Pide la ubicación al navegador con mensajes que la empleada entienda. */
 function pedirUbicacion(): Promise<Ubicacion> {
   return new Promise((resolve, reject) => {
-    if (!('geolocation' in navigator)) return reject(new Error('Este dispositivo no permite obtener la ubicación.'));
+    if (!('geolocation' in navigator)) return reject(new Error('Este navegador no permite obtener la ubicación. Conéctate al Wi-Fi de la cafetería.'));
     navigator.geolocation.getCurrentPosition(
       p => resolve({ latitud: p.coords.latitude, longitud: p.coords.longitude, precisionM: Math.round(p.coords.accuracy) }),
       e => reject(new Error(e.code === e.PERMISSION_DENIED
-        ? 'Permite el acceso a la ubicación en el navegador: solo se puede fichar desde la cafetería.'
-        : 'No se pudo obtener tu ubicación. Inténtalo de nuevo junto a una ventana o con el GPS activado.')),
+        ? 'No diste permiso de ubicación. Actívalo en los ajustes del navegador para que tus fichajes queden verificados.'
+        : 'El móvil no pudo obtener la ubicación (GPS sin señal). Conéctate al Wi-Fi de la cafetería la próxima vez.')),
       { enableHighAccuracy: true, timeout: 12_000, maximumAge: 0 }
     );
   });
@@ -59,9 +60,18 @@ export function Fichador() {
     enCurso.current = true;
     setEnviando(true);
     try {
-      const ubicacion = resumen.geocerca.activa ? await pedirUbicacion() : undefined;
+      // En el Wi-Fi de la cafetería no se pide la ubicación. Si el GPS falla, se ficha igual y el servidor
+      // decide (Wi-Fi, «sin verificar» o rechazo según los ajustes): nadie se queda sin poder fichar por el GPS.
+      let ubicacion: Ubicacion | undefined;
+      let avisoGps: string | null = null;
+      if (resumen.geocerca.activa && !resumen.enRedCafeteria) {
+        try { ubicacion = await pedirUbicacion(); } catch (e) { avisoGps = mensajeError(e); }
+      }
       const { fichaje } = await api.fichar(resumen.toca, ubicacion);
-      toast.success(`${fichaje.tipo === 'entrada' ? 'Entrada' : 'Salida'} registrada a las ${hhmm(fichaje.minuto)}`);
+      const texto = `${fichaje.tipo === 'entrada' ? 'Entrada' : 'Salida'} registrada a las ${hhmm(fichaje.minuto)}`;
+      if (fichaje.verificacion === 'sin_verificar') {
+        toast.warning(`${texto}. No se pudo comprobar que estés en la cafetería: el encargado lo revisará.`, { description: avisoGps ?? undefined, duration: 8000 });
+      } else toast.success(texto);
       if (navigator.vibrate) navigator.vibrate(30);
     } catch (e) {
       toast.error(mensajeError(e));
@@ -127,9 +137,14 @@ export function Fichador() {
             {enviando ? (resumen.geocerca.activa ? 'Comprobando ubicación…' : 'Fichando…') : esEntrada ? 'Fichar entrada' : 'Fichar salida'}
           </motion.button>
 
-          {resumen.geocerca.activa && (
-            <span className="flex items-center gap-1.5 text-[12px] text-muted"><MapPin size={13} />Solo se puede fichar en la cafetería (radio {resumen.geocerca.radioM} m)</span>
-          )}
+          {resumen.enRedCafeteria ? (
+            <span className="flex items-center gap-1.5 text-[12px] text-ok-fg"><Wifi size={13} />Conectada al Wi-Fi de la cafetería</span>
+          ) : resumen.geocerca.activa ? (
+            <span className="flex items-center gap-1.5 text-[12px] text-muted"><MapPin size={13} />Se comprobará que estás en la cafetería (radio {resumen.geocerca.radioM} m){resumen.red.activa ? ' o conéctate a su Wi-Fi' : ''}</span>
+          ) : resumen.red.activa ? (
+            <span className="flex items-center gap-1.5 text-[12px] text-muted"><Wifi size={13} />Conéctate al Wi-Fi de la cafetería para fichar</span>
+          ) : null}
+          {dentro && <span className="text-[11px] text-muted">Si olvidas fichar la salida, se cerrará sola a las {resumen.cierreAutomaticoHoras} h.</span>}
         </Card>
 
         <Card className="flex flex-col gap-4 p-5">
@@ -147,7 +162,7 @@ export function Fichador() {
                     <span className={cx('grid h-6 w-6 place-items-center rounded-full', f.tipo === 'entrada' ? 'bg-ok-bg text-ok-fg' : 'bg-sunken text-muted')}>
                       {f.tipo === 'entrada' ? <LogIn size={13} /> : <LogOut size={13} />}
                     </span>
-                    <span className="flex-1">{f.tipo === 'entrada' ? 'Entrada' : 'Salida'}</span>
+                    <span className="flex flex-1 flex-wrap items-center gap-1.5">{f.tipo === 'entrada' ? 'Entrada' : 'Salida'}<EtiquetasFichaje f={f} compacto /></span>
                     <span className="num font-semibold">{hhmm(f.minuto)}</span>
                   </motion.li>
                 ))}
@@ -182,6 +197,7 @@ export function Fichador() {
                       <span className="w-28 font-medium">{capital(fmt(desdeIso(d.fecha), 'EEE d MMM'))}</span>
                       <span className="num flex-1 text-muted">{d.fichajes.map(f => `${f.tipo === 'entrada' ? '↘' : '↗'} ${hhmm(f.minuto)}`).join('   ')}</span>
                       {d.incompleto && <Badge tone="warn">Falta salida</Badge>}
+                      {d.corregido && <Badge tone="primary">Corregido</Badge>}
                       <span className="num w-14 text-right font-semibold">{dur(d.minutos)}</span>
                     </div>
                   ))}

@@ -25,7 +25,8 @@ const MARGEN_RETRASO_MIN = 5;
 function EstadoFichaje({ fichajes, turno, minutoActual }: { fichajes: Fichaje[]; turno?: Turno; minutoActual: number }) {
   const e = estadoDia(fichajes);
   if (e.dentro) return <span className="flex items-center gap-1.5 text-[11px] font-semibold"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ok-solid" />Dentro desde {hhmm(e.abierta!)}</span>;
-  if (e.pares.length) return <span className="text-[11px] opacity-80">Salió a las {hhmm(e.pares.at(-1)!.fin)} · {dur(e.minutos)}</span>;
+  const automatica = fichajes.some(f => !f.anulado && f.origen === 'automatico');
+  if (e.pares.length) return <span className={cx('text-[11px]', automatica ? 'font-semibold text-warn-fg' : 'opacity-80')}>{automatica ? 'Cierre automático' : 'Salió'} a las {hhmm(e.pares.at(-1)!.fin)} · {dur(e.minutos)}</span>;
   if (turno && turno.tramos[0].inicio + MARGEN_RETRASO_MIN <= minutoActual) return <span className="text-[11px] font-semibold text-warn-fg">Sin fichar</span>;
   return <span className="text-[11px] opacity-60">Aún no ha fichado</span>;
 }
