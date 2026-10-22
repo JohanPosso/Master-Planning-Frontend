@@ -29,11 +29,16 @@ export interface FichajeConfig {
   cierreAutomaticoHoras: number;
 }
 export interface LineaPago { empleadaId: string; minutos: number; importeCent: number; tarifaCent?: number; recargosCent?: number }
-export interface PeriodoPago { id: string; inicio: string; fin: string; etiqueta: string; pagadoEn: string; totalCent: number; lineas: LineaPago[] }
+export interface PeriodoPago {
+  id: string; inicio: string; fin: string; etiqueta: string; pagadoEn: string; totalCent: number; lineas: LineaPago[];
+  /** Solo al crear: limita el pago a estas empleadas. */
+  empleadaIds?: string[];
+}
 export interface Semana { lunes: string; publicada: boolean }
 
 export interface Reglas {
   apertura: { desde: number; hasta: number };
+  cierres: { desde: number; hasta: number }[];
   franjaVacia: boolean;
   minPersonas: { activa: boolean; desde: number; hasta: number; valor: number };
   maxHorasDia: { activa: boolean; valor: number };

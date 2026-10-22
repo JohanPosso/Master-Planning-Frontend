@@ -13,7 +13,7 @@ const base = (): State => ({
   registros: [],
   pagos: [],
   semanas: [{ lunes: '2026-10-05', publicada: false }],
-  reglas: { apertura: { desde: 400, hasta: 1260 }, franjaVacia: true, minPersonas: { activa: true, desde: 540, hasta: 780, valor: 2 }, maxHorasDia: { activa: true, valor: 10 }, maxHorasSemana: { activa: true, valor: 40 }, diaLibre: true, descansoSeguido: true },
+  reglas: { apertura: { desde: 400, hasta: 1260 }, cierres: [{ desde: 840, hasta: 1020 }], franjaVacia: true, minPersonas: { activa: true, desde: 540, hasta: 780, valor: 2 }, maxHorasDia: { activa: true, valor: 10 }, maxHorasSemana: { activa: true, valor: 40 }, diaLibre: true, descansoSeguido: true },
   ajustes: { recargoDomingoPct: 0, recargoFestivoPct: 25, festivos: ['2026-10-12'] },
   fichajes: [],
   fichaje: { geocerca: { activa: false, latitud: null, longitud: null, radioM: 150 }, red: { activa: false, ips: [] }, sinVerificar: 'revisar' as const, cierreAutomaticoHoras: 10 }

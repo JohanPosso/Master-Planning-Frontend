@@ -39,7 +39,7 @@ export default function Inicio() {
   const pagables = emps.filter(e => !e.excluirNomina);
   const semPay = (l: Date) => pagables.reduce((a, e) => a + semMin(l, e.id), 0);
   const esta = semPay(lunes), pasada = semPay(addDays(lunes, -7));
-  const mes = useMemo(() => calcularPeriodo(state, startOfMonth(hoyD), endOfMonth(hoyD)), [state]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mes = useMemo(() => calcularPeriodo(state, startOfMonth(hoyD), endOfMonth(hoyD), true, iso(hoyD)), [state]); // eslint-disable-line react-hooks/exhaustive-deps
   const minutoActual = useMinutoActual();
   const fichajesHoy = useMemo(() => agruparFichajes(state.fichajes.filter(f => f.fecha === hoy)), [state.fichajes, hoy]);
   const fichDe = (id: string) => fichajesHoy.get(`${id}|${hoy}`) ?? [];
@@ -67,7 +67,7 @@ export default function Inicio() {
       </PageHeader>
       <div className="num grid flex-1 grid-cols-1 gap-3.5 p-4 md:grid-cols-12 md:px-6 md:py-5">
         <Card className="flex flex-col gap-1.5 p-4 md:col-span-3"><span className="text-xs font-medium text-muted">Horas esta semana · nómina</span><span className="text-[28px] font-semibold tracking-tight">{dur(esta)}</span><span className="text-xs text-muted"><span className={cx('font-semibold', esta >= pasada ? 'text-ok-fg' : 'text-warn-fg')}>{esta >= pasada ? '+' : '−'}{dur(Math.abs(esta - pasada))}</span> vs. semana pasada</span></Card>
-        <Card className="flex flex-col gap-1.5 p-4 md:col-span-3"><span className="text-xs font-medium text-muted">Coste estimado · {fmt(hoyD, 'MMMM')}</span><span className="text-[28px] font-semibold tracking-tight">{eur(mes.total)}</span><span className="text-xs text-muted">{mes.pendientes} días sin confirmar</span></Card>
+        <Card className="flex flex-col gap-1.5 p-4 md:col-span-3"><span className="text-xs font-medium text-muted">Pendiente de pagar · {fmt(hoyD, 'MMMM')}</span><span className="text-[28px] font-semibold tracking-tight">{eur(mes.total)}</span><span className="text-xs text-muted">{mes.pendientes} días sin confirmar</span></Card>
         <Card className="flex flex-col gap-2.5 p-4 md:col-span-6">
           <div className="flex justify-between gap-2"><span className="text-xs font-medium text-muted">Hoy trabajan{dentroAhora > 0 && <span className="text-ok-fg"> · {dentroAhora} dentro ahora</span>}</span><span className="text-xs text-muted">Descansan: {descansan.length ? descansan.map(e => e.nombre).join(', ') : 'nadie'}</span></div>
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">

@@ -1,23 +1,55 @@
+import { addDays } from 'date-fns';
 import type { Aviso, Registro, State, Turno } from './types';
-import { diasSemana, fmt, hhmm, iso, minutos, esDomingo, capital } from './time';
+import { diasSemana, desdeIso, fmt, hhmm, iso, minutos, esDomingo, capital } from './time';
 
 export const activas = (s: State) => s.empleadas.filter(e => e.activa && !e.eliminadaEn);
 const activaId = (s: State, id: string) => activas(s).some(e => e.id === id);
 
 export interface Slot { t: number; c: number; req: number }
+
+export function abiertoEn(s: State, t: number): boolean {
+  const { apertura, cierres = [] } = s.reglas;
+  if (t < apertura.desde || t >= apertura.hasta) return false;
+  return !cierres.some(c => t >= c.desde && t < c.hasta);
+}
+
 /** Cobertura cada 10 min de 06:00 a 21:00. */
 export function cobertura(s: State, fecha: string): Slot[] {
   const segs = s.turnos.filter(t => t.fecha === fecha && activaId(s, t.empleadaId)).flatMap(t => t.tramos);
-  const { apertura, minPersonas, franjaVacia } = s.reglas;
+  const { minPersonas, franjaVacia } = s.reglas;
   const out: Slot[] = [];
   for (let t = 360; t < 1260; t += 10) {
     const c = segs.filter(x => t >= x.inicio && t < x.fin).length;
-    const abierto = t >= apertura.desde && t < apertura.hasta;
+    const abierto = abiertoEn(s, t);
     let req = abierto && franjaVacia ? 1 : 0;
     if (abierto && minPersonas.activa && t >= minPersonas.desde && t < minPersonas.hasta) req = Math.max(req, minPersonas.valor);
     out.push({ t, c, req });
   }
   return out;
+}
+
+/** Días ya liquidados para una empleada (solo cuentan pagos donde ella tiene línea). */
+export function fechasPagadasEmpleada(pagos: State['pagos'], empleadaId: string, desde?: string, hasta?: string): Set<string> {
+  const out = new Set<string>();
+  for (const p of pagos) {
+    if (!p.lineas.some(l => l.empleadaId === empleadaId)) continue;
+    if (hasta && p.inicio > hasta) continue;
+    if (desde && p.fin < desde) continue;
+    for (let d = desdeIso(p.inicio); iso(d) <= p.fin; d = addDays(d, 1)) {
+      const f = iso(d);
+      if (desde && f < desde) continue;
+      if (hasta && f > hasta) continue;
+      out.add(f);
+    }
+  }
+  return out;
+}
+
+export function inicioSinPagar(pagos: State['pagos'], empleadaId: string, fallback: string): string {
+  const propios = pagos.filter(p => p.lineas.some(l => l.empleadaId === empleadaId));
+  if (!propios.length) return fallback;
+  const ultimo = propios.reduce((a, p) => (p.fin > a ? p.fin : a), propios[0].fin);
+  return iso(addDays(desdeIso(ultimo), 1));
 }
 
 export function avisosSemana(s: State, lunes: Date): Aviso[] {

@@ -139,7 +139,7 @@ function AjustesFichaje() {
         <Fila titulo="Radio permitido" desc="Entre 25 m y 5 km. Se tolera la imprecisión del GPS (hasta 100 m).">
           <Num value={g.radioM} onChange={v => guardarGeocerca({ radioM: v })} suf="m" min={25} max={5000} />
         </Fila>
-        <Fila titulo="Por Wi-Fi de la cafetería" desc={c.red.ips.length ? 'Quien ficha conectada a esta red no necesita dar la ubicación. Funciona con la IP pública del router: si tu proveedor la cambia, vuelve a añadirla.' : 'Añade la IP pública del Wi-Fi de la cafetería: pulsa «Usar la red actual» estando allí, o escríbela si alguien conectado la consulta en «cuál es mi IP».'}>
+        <Fila titulo="Por Wi-Fi de la cafetería" desc={c.red.ips.length ? 'Opcional. Si la IP cambia a menudo, déjalo apagado.' : 'Opcional. Añade la IP pública del Wi-Fi si quieres usarla.'}>
           <div className={cx(!c.red.ips.length && 'pointer-events-none opacity-45')}><Toggle on={c.red.activa} onChange={v => guardar({ red: { ...c.red, activa: v } })} label="Fichar por Wi-Fi" /></div>
         </Fila>
         <Fila titulo="Redes guardadas" desc={c.red.ips.length ? (
@@ -181,8 +181,11 @@ export default function Ajustes() {
   const [fest, setFest] = useState('');
   const r = state.reglas;
   const set = (p: Partial<Reglas>) => acciones.setReglas(p);
-  const reglas: { t: string; d: string; on: boolean; tog: (v: boolean) => void; ctrl?: ReactNode }[] = [
-    { t: 'Horario de apertura', d: 'Fuera de esta franja no se exige cobertura.', on: true, tog: () => {}, ctrl: <div className="flex items-center gap-1"><Hora value={r.apertura.desde} onChange={v => set({ apertura: { ...r.apertura, desde: v } })} /><span className="text-muted">–</span><Hora value={r.apertura.hasta} onChange={v => set({ apertura: { ...r.apertura, hasta: v } })} /></div> },
+  const cierre = r.cierres?.[0] ?? { desde: 840, hasta: 1020 };
+  const cierreOn = (r.cierres?.length ?? 0) > 0;
+  const reglas: { t: string; d: string; on: boolean; tog: (v: boolean) => void; ctrl?: ReactNode; fijo?: boolean }[] = [
+    { t: 'Horario de apertura', d: 'Fuera de esta franja no se exige cobertura.', on: true, tog: () => {}, fijo: true, ctrl: <div className="flex items-center gap-1"><Hora value={r.apertura.desde} onChange={v => set({ apertura: { ...r.apertura, desde: v } })} /><span className="text-muted">–</span><Hora value={r.apertura.hasta} onChange={v => set({ apertura: { ...r.apertura, hasta: v } })} /></div> },
+    { t: 'Cierre mediodía', d: 'No exige cobertura en este hueco.', on: cierreOn, tog: v => set({ cierres: v ? [cierre] : [] }), ctrl: <div className="flex items-center gap-1"><Hora value={cierre.desde} onChange={v => set({ cierres: [{ ...cierre, desde: v }] })} /><span className="text-muted">–</span><Hora value={cierre.hasta} onChange={v => set({ cierres: [{ ...cierre, hasta: v }] })} /></div> },
     { t: 'Franja descubierta', d: 'Avisa si en horario de apertura no hay nadie.', on: r.franjaVacia, tog: v => set({ franjaVacia: v }) },
     { t: 'Mínimo de personas', d: 'En la franja indicada.', on: r.minPersonas.activa, tog: v => set({ minPersonas: { ...r.minPersonas, activa: v } }), ctrl: <div className="flex items-center gap-1"><Num value={r.minPersonas.valor} onChange={v => set({ minPersonas: { ...r.minPersonas, valor: v } })} w={44} min={1} max={50} /><Hora value={r.minPersonas.desde} onChange={v => set({ minPersonas: { ...r.minPersonas, desde: v } })} /><span className="text-muted">–</span><Hora value={r.minPersonas.hasta} onChange={v => set({ minPersonas: { ...r.minPersonas, hasta: v } })} /></div> },
     { t: 'Máximo de horas al día', d: 'No aplica a quien tenga rol Jefa.', on: r.maxHorasDia.activa, tog: v => set({ maxHorasDia: { ...r.maxHorasDia, activa: v } }), ctrl: <Num value={r.maxHorasDia.valor} onChange={v => set({ maxHorasDia: { ...r.maxHorasDia, valor: v } })} suf="h" w={44} min={1} max={24} /> },
@@ -210,7 +213,7 @@ export default function Ajustes() {
               <div key={x.t} className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
                 <div className="flex min-w-[180px] flex-1 flex-col gap-0.5"><span className="text-sm font-medium">{x.t}</span><span className="text-xs text-muted">{x.d}</span></div>
                 {x.ctrl && <div className={cx(!x.on && 'pointer-events-none opacity-45')}>{x.ctrl}</div>}
-                {x.t !== 'Horario de apertura' && <Toggle on={x.on} onChange={x.tog} label={x.t} />}
+                {!x.fijo && <Toggle on={x.on} onChange={x.tog} label={x.t} />}
               </div>
             ))}
           </Card>

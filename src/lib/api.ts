@@ -145,7 +145,7 @@ export const api = {
   guardarRegistro: (r: Registro) => pedir<Registro>('PUT', `/registros/${r.empleadaId}/${r.fecha}`, r),
   confirmarDia: (fecha: string, empleadaIds: string[]) => pedir<Registro[]>('POST', '/registros/confirmar-dia', { fecha, empleadaIds }),
 
-  pagar: (p: { id: string; inicio: string; fin: string; etiqueta: string }) => pedir<PeriodoPago>('POST', '/pagos', p),
+  pagar: (p: { id: string; inicio: string; fin: string; etiqueta: string; empleadaIds?: string[] }) => pedir<PeriodoPago>('POST', '/pagos', p),
 
   guardarPlantilla: (p: Plantilla) => pedir<Plantilla>('PUT', `/plantillas/${p.id}`, p),
   eliminarPlantilla: (id: string) => pedir<void>('DELETE', `/plantillas/${id}`),

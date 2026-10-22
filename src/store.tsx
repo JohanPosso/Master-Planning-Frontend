@@ -23,7 +23,7 @@ interface Api {
     publicarSemana: (lunes: Date, publicada: boolean) => void;
     guardarRegistro: (r: Omit<Registro, 'id'> & { id?: string }, msg?: string) => void;
     confirmarDia: (fecha: string, empleadaIds: string[]) => void;
-    marcarPagado: (p: Omit<PeriodoPago, 'id' | 'pagadoEn'>) => void;
+    marcarPagado: (p: Omit<PeriodoPago, 'id' | 'pagadoEn'> & { empleadaIds?: string[] }) => void;
     guardarPlantilla: (p: Plantilla) => void;
     eliminarPlantilla: (id: string) => void;
     setReglas: (r: Partial<State['reglas']>) => void;
@@ -167,8 +167,8 @@ function crearMotor(setState: (s: State) => void, setError: (e: string | null) =
       mut: s => ({ ...s, registros: regs.reduce((acc, r) => upsert(acc, r, mismoDia(r)), s.registros) }),
       msg: 'Horas confirmadas'
     })),
-    marcarPagado: p => enServidor(() => api.pagar({ id: uid(), inicio: p.inicio, fin: p.fin, etiqueta: p.etiqueta }), pago => ({
-      mut: s => ({ ...s, pagos: [pago, ...s.pagos.filter(x => x.inicio !== pago.inicio)] }),
+    marcarPagado: p => enServidor(() => api.pagar({ id: uid(), inicio: p.inicio, fin: p.fin, etiqueta: p.etiqueta, empleadaIds: p.empleadaIds }), pago => ({
+      mut: s => ({ ...s, pagos: [pago, ...s.pagos.filter(x => x.id !== pago.id)] }),
       msg: `${p.etiqueta} marcado como pagado`
     })),
     guardarPlantilla: p => optimista(s => ({ ...s, plantillas: upsert(s.plantillas, p, x => x.id === p.id) }), () => api.guardarPlantilla(p), 'Plantilla guardada'),
